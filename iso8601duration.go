@@ -72,6 +72,60 @@ func (d Duration) Add(from time.Time) time.Time {
 	}
 }
 
+// Normalize 正規化する (24時間を1日/60分を1時間にする)
+func (d Duration) Normalize() Duration {
+	// 秒
+	seconds := d.Seconds
+	minutes := math.Trunc(seconds / 60)
+	if math.MaxFloat64-d.Minutes < minutes {
+		// overflow
+		minutes = d.Minutes
+	} else {
+		seconds -= minutes * 60
+		minutes += d.Minutes
+	}
+
+	// 分
+	hours := math.Trunc(minutes / 60)
+	if math.MaxFloat64-d.Hours < hours {
+		// overflow
+		hours = d.Hours
+	} else {
+		minutes -= hours * 60
+		hours += d.Hours
+	}
+
+	// 時
+	days := uint64(hours / 24)
+	if math.MaxUint64-d.Days < days {
+		days = d.Days
+	} else {
+		hours -= float64(days * 24)
+		days += d.Days
+	}
+
+	// 月
+	months := d.Months
+	years := months / 12
+	if math.MaxUint64-d.Years < years {
+		// overflow
+		years = d.Years
+	} else {
+		months -= years * 12
+		years += d.Years
+	}
+
+	return Duration{
+		Years:   years,
+		Months:  months,
+		Weeks:   d.Weeks,
+		Days:    days,
+		Hours:   hours,
+		Minutes: minutes,
+		Seconds: seconds,
+	}
+}
+
 func (d *Duration) String() string {
 	if d.IsZero() {
 		return "PT0S"
