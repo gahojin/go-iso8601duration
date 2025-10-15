@@ -5,6 +5,7 @@ import (
 	"encoding"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"regexp"
 	"strconv"
@@ -27,6 +28,9 @@ var (
 
 	// ErrBadFormat フォーマット不正エラー
 	ErrBadFormat = errors.New("bad format string")
+
+	// ErrUnsupportedNegative マイナス期間未サポート
+	ErrUnsupportedNegative = errors.New("unsupported negative duration")
 )
 
 // 型チェック
@@ -81,6 +85,59 @@ func (d Duration) Add(from time.Time) time.Time {
 	}
 }
 
+// AddJapan 指定日時から期間分経過した日時を返す (民法第139条,140条,141条,143条に準拠)
+// 計算方法が未定義であるため、マイナス期間はサポートしない
+// 民法第139条
+//   - 時間によって期間を定めたときは、その期間は、即時から起算する。
+//
+// 民法第140条
+//   - 日、週、月又は年によって期間を定めたときは、期間の初日は、算入しない。
+//     ただし、その期間が午前零時から始まるときは、この限りでない。
+//
+// 民法第141条
+//   - 前条の場合には、期間は、その末日の終了をもって満了する。
+//
+// 民法第143条
+//   - 週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。
+//   - 週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。
+//     ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。
+func (d Duration) AddJapan(from time.Time) (*time.Time, error) {
+	// マイナス期間はサポートしない
+	if d.Negative {
+		return nil, ErrUnsupportedNegative
+	}
+
+	// 民法139条 時間により期間を定めた時は、その期間は、即時から起算する
+	target := from
+	if !d.HasTimePart() {
+		isStartOfDay := from.Hour() == 0 && from.Minute() == 0 && from.Second() == 0 && from.Nanosecond() == 0
+		// 民法第140条により、起算日を算出 (初日不算入の原則により、翌日から起算する)
+		// 00:00:00の場合、初日算入する(民法第140条ただし書)
+		if !isStartOfDay {
+			target = time.Date(from.Year(), from.Month(), from.Day()+1, 0, 0, 0, 0, from.Location())
+		}
+	}
+
+	// 年月を加算し、応当日があるか判断する
+	fmt.Printf("year = %v\n", d.Years)
+	target = target.AddDate(int(d.Years), int(d.Months), 0)
+	if target.Day() != from.Day() {
+		// 応当日がない場合、翌日にする
+		// 2025/01/30に1ヶ月加算の場合、AddDateでは2025/03/02(その月の月末 + 差分の日数)が返ってくる
+		// 満了日時を2025/02/28 24時とするため、1日(翌日)とする (民法第143条)
+		target = time.Date(target.Year(), target.Month(), 1, target.Hour(), target.Minute(), target.Second(), target.Nanosecond(), target.Location())
+	}
+
+	// 週と日を加算する
+	if d.Days > 0 || d.Weeks > 0 {
+		target = target.AddDate(0, 0, int(d.Days+d.Weeks*7))
+	}
+
+	timeDuration := math.Round((d.Hours*60*60 + d.Minutes*60 + d.Seconds) * 1000 * 1000 * 1000)
+	target = target.Add(time.Duration(timeDuration))
+	return &target, nil
+}
+
 // Normalize 正規化する (24時間を1日/60分を1時間にする)
 func (d Duration) Normalize() (Duration, bool) {
 	// 秒
@@ -90,8 +147,8 @@ func (d Duration) Normalize() (Duration, bool) {
 		// overflow
 		return d, false
 	}
-		seconds -= minutes * 60
-		minutes += d.Minutes
+	seconds -= minutes * 60
+	minutes += d.Minutes
 
 	// 分
 	hours := math.Trunc(minutes / 60)
@@ -99,8 +156,8 @@ func (d Duration) Normalize() (Duration, bool) {
 		// overflow
 		return d, false
 	}
-		minutes -= hours * 60
-		hours += d.Hours
+	minutes -= hours * 60
+	hours += d.Hours
 
 	// 時
 	days := uint64(hours / 24)
@@ -108,8 +165,8 @@ func (d Duration) Normalize() (Duration, bool) {
 		// overflow
 		return d, false
 	}
-		hours -= float64(days * 24)
-		days += d.Days
+	hours -= float64(days * 24)
+	days += d.Days
 
 	// 月
 	months := d.Months
@@ -118,8 +175,8 @@ func (d Duration) Normalize() (Duration, bool) {
 		// overflow
 		return d, false
 	}
-		months -= years * 12
-		years += d.Years
+	months -= years * 12
+	years += d.Years
 
 	return Duration{
 		Years:   years,

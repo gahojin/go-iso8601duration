@@ -2,7 +2,9 @@ package iso8601duration
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -149,6 +151,111 @@ func TestAdd(t *testing.T) {
 	assert.Equal(t, time.Date(2026, 12, 10+21+4, 5, 6, 7, 800*1000*1000, time.UTC), actual)
 }
 
+func TestAddJapan(t *testing.T) {
+	tests := []struct {
+		from     string
+		duration string
+		want     string
+	}{
+		// 当日
+		{from: "2020-06-01", duration: "P1D", want: "2020-06-02T00:00:00"},
+		// 2日間
+		{from: "2020-06-01", duration: "P2D", want: "2020-06-03T00:00:00"},
+		// 月末/2日間
+		{from: "2020-06-30", duration: "P2D", want: "2020-07-02T00:00:00"},
+		// 1ヶ月
+		{from: "2020-06-01", duration: "P1M", want: "2020-07-01T00:00:00"},
+		{from: "2020-08-31", duration: "P1M", want: "2020-10-01T00:00:00"},
+		{from: "2020-10-10", duration: "P1M", want: "2020-11-10T00:00:00"},
+		{from: "2020-12-01", duration: "P1M", want: "2021-01-01T00:00:00"},
+		{from: "2021-01-31", duration: "P1M", want: "2021-03-01T00:00:00"},
+		{from: "2022-02-28", duration: "P1M", want: "2022-03-28T00:00:00"},
+		{from: "2024-01-29", duration: "P1M", want: "2024-02-29T00:00:00"},
+		{from: "2024-01-30", duration: "P1M", want: "2024-03-01T00:00:00"},
+		{from: "2024-01-31", duration: "P1M", want: "2024-03-01T00:00:00"},
+		{from: "2024-02-01", duration: "P1M", want: "2024-03-01T00:00:00"},
+		{from: "2024-03-01", duration: "P1M", want: "2024-04-01T00:00:00"},
+		// 1ヶ月 1日
+		{from: "2020-06-01", duration: "P1M1D", want: "2020-07-02T00:00:00"},
+		{from: "2020-08-31", duration: "P1M1D", want: "2020-10-02T00:00:00"},
+		{from: "2020-10-10", duration: "P1M1D", want: "2020-11-11T00:00:00"},
+		{from: "2020-12-01", duration: "P1M1D", want: "2021-01-02T00:00:00"},
+		{from: "2021-01-31", duration: "P1M1D", want: "2021-03-02T00:00:00"},
+		{from: "2021-02-28", duration: "P1M1D", want: "2021-03-29T00:00:00"},
+		{from: "2024-01-29", duration: "P1M1D", want: "2024-03-01T00:00:00"},
+		{from: "2024-01-30", duration: "P1M1D", want: "2024-03-02T00:00:00"},
+		{from: "2024-01-31", duration: "P1M1D", want: "2024-03-02T00:00:00"},
+		{from: "2024-02-01", duration: "P1M1D", want: "2024-03-02T00:00:00"},
+		{from: "2024-03-01", duration: "P1M1D", want: "2024-04-02T00:00:00"},
+		// 3ヶ月
+		{from: "2020-06-01", duration: "P3M", want: "2020-09-01T00:00:00"},
+		{from: "2020-08-31", duration: "P3M", want: "2020-12-01T00:00:00"},
+		{from: "2020-10-10", duration: "P3M", want: "2021-01-10T00:00:00"},
+		{from: "2020-12-01", duration: "P3M", want: "2021-03-01T00:00:00"},
+		{from: "2021-01-31", duration: "P3M", want: "2021-05-01T00:00:00"},
+		{from: "2021-02-28", duration: "P3M", want: "2021-05-28T00:00:00"},
+		// 6ヶ月
+		{from: "2020-06-01", duration: "P6M", want: "2020-12-01T00:00:00"},
+		{from: "2020-08-31", duration: "P6M", want: "2021-03-01T00:00:00"},
+		{from: "2020-10-10", duration: "P6M", want: "2021-04-10T00:00:00"},
+		{from: "2020-12-01", duration: "P6M", want: "2021-06-01T00:00:00"},
+		{from: "2021-01-31", duration: "P6M", want: "2021-07-31T00:00:00"},
+		{from: "2021-02-28", duration: "P6M", want: "2021-08-28T00:00:00"},
+		// 1週間
+		{from: "2021-02-28", duration: "P1W", want: "2021-03-07T00:00:00"},
+		// その他
+		{from: "2023-01-01", duration: "P2M", want: "2023-03-01T00:00:00"}, // 143条2項 (平年)
+		{from: "2024-01-01", duration: "P2M", want: "2024-03-01T00:00:00"}, // 143条2項 (閏年)
+		{from: "2024-01-20", duration: "P2M", want: "2024-03-20T00:00:00"}, // 143条2項
+		{from: "2024-01-31", duration: "P2M", want: "2024-03-31T00:00:00"}, // 143条2項
+		{from: "2023-01-31", duration: "P1M", want: "2023-03-01T00:00:00"}, // 143条2項ただし書 (平年)
+		{from: "2024-01-31", duration: "P1M", want: "2024-03-01T00:00:00"}, // 143条2項ただし書 (閏年)
+		{from: "2024-03-31", duration: "P1M", want: "2024-05-01T00:00:00"}, // 143条2項ただし書
+		{from: "2024-03-31", duration: "P1M", want: "2024-05-01T00:00:00"}, // 143条2項ただし書
+		{from: "2024-05-30T01:00:00", duration: "P1M", want: "2024-07-01T00:00:00"},
+		{from: "2024-05-30T01:00:00", duration: "P1MT1H", want: "2024-06-30T02:00:00"},
+		{from: "2023-01-29", duration: "P1M", want: "2023-03-01T00:00:00"},
+		{from: "2020-02-28", duration: "P1Y", want: "2021-02-28T00:00:00"},
+		{from: "2020-02-28T01:00:00", duration: "P1Y", want: "2021-03-01T00:00:00"},
+		{from: "2020-08-15", duration: "P1Y3M", want: "2021-11-15T00:00:00"},
+		{from: "2020-08-31", duration: "P1Y1M", want: "2021-10-01T00:00:00"},
+		{from: "2024-06-01T18:00:00", duration: "PT30H", want: "2024-06-03T00:00:00"},
+		{from: "2024-06-01", duration: "P2Y", want: "2026-06-01T00:00:00"},
+	}
+	tz := time.FixedZone("Asia/Tokyo", 9*60*60)
+	var fromTime time.Time
+	var err error
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s %s", tt.from, tt.duration), func(t *testing.T) {
+			if strings.Contains(tt.from, "T") {
+				fromTime, err = time.ParseInLocation("2006-01-02T15:04:05", tt.from, tz)
+			} else {
+				fromTime, err = time.ParseInLocation("2006-01-02", tt.from, tz)
+			}
+			assert.Nil(t, err)
+			duration, err := ParseString(tt.duration)
+			assert.Nil(t, err)
+			actual, err := duration.AddJapan(fromTime)
+			assert.Nil(t, err)
+			expect, err := time.ParseInLocation("2006-01-02T15:04:05", tt.want, tz)
+			assert.Nil(t, err)
+			assert.Equal(t, expect, *actual)
+		})
+	}
+}
+
+func TestA(t *testing.T) {
+	tz := time.FixedZone("Asia/Tokyo", 9*60*60)
+	fromTime, err := time.ParseInLocation("2006-01-02", "2020-08-31", tz)
+	assert.Nil(t, err)
+	duration, err := ParseString("P1Y1M")
+	assert.Nil(t, err)
+	actual, err := duration.AddJapan(fromTime)
+
+	fmt.Printf("fromTime = %v\n", fromTime)
+	fmt.Printf("actual = %v\n", actual)
+}
+
 func TestNormalize(t *testing.T) {
 	// 境界チェック
 	actual, ok := Duration{Months: 12}.Normalize()
@@ -194,11 +301,11 @@ func TestNormalize(t *testing.T) {
 
 		assert.True(t, ok)
 		assert.Less(t, actual.Months, uint64(12))
-			if months >= 12 {
-				assert.Greater(t, actual.Years, years)
-			} else {
-				assert.GreaterOrEqual(t, actual.Years, years)
-			}
+		if months >= 12 {
+			assert.Greater(t, actual.Years, years)
+		} else {
+			assert.GreaterOrEqual(t, actual.Years, years)
+		}
 
 		assert.Less(t, actual.Hours, float64(24))
 		assert.Less(t, actual.Minutes, float64(60))
