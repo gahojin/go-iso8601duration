@@ -151,18 +151,32 @@ func TestAdd(t *testing.T) {
 
 func TestNormalize(t *testing.T) {
 	// 境界チェック
-	assert.Equal(t, Duration{Years: 1}, Duration{Months: 12}.Normalize())
-	assert.Equal(t, Duration{Days: 1}, Duration{Hours: 24}.Normalize())
-	assert.Equal(t, Duration{Hours: 1}, Duration{Minutes: 60}.Normalize())
-	assert.Equal(t, Duration{Minutes: 1}, Duration{Seconds: 60}.Normalize())
-	assert.Equal(t, Duration{Years: 1, Days: 1, Hours: 1, Minutes: 1}, Duration{Months: 12, Hours: 24, Minutes: 60, Seconds: 60}.Normalize())
+	actual, ok := Duration{Months: 12}.Normalize()
+	assert.True(t, ok)
+	assert.Equal(t, Duration{Years: 1}, actual)
+
+	actual, ok = Duration{Hours: 24}.Normalize()
+	assert.True(t, ok)
+	assert.Equal(t, Duration{Days: 1}, actual)
+
+	actual, ok = Duration{Minutes: 60}.Normalize()
+	assert.True(t, ok)
+	assert.Equal(t, Duration{Hours: 1}, actual)
+
+	actual, ok = Duration{Seconds: 60}.Normalize()
+	assert.True(t, ok)
+	assert.Equal(t, Duration{Minutes: 1}, actual)
+
+	actual, ok = Duration{Months: 12, Hours: 24, Minutes: 60, Seconds: 60}.Normalize()
+	assert.True(t, ok)
+	assert.Equal(t, Duration{Years: 1, Days: 1, Hours: 1, Minutes: 1}, actual)
 
 	// プロパティテスト
 	rapid.Check(t, func(t *rapid.T) {
-		years := rapid.Uint64().Draw(t, "years")
-		months := rapid.Uint64().Draw(t, "months")
-		weeks := rapid.Uint64().Draw(t, "weeks")
-		days := rapid.Uint64().Draw(t, "days")
+		years := rapid.Uint64Max(10000).Draw(t, "years")
+		months := rapid.Uint64Max(10000).Draw(t, "months")
+		weeks := rapid.Uint64Max(10000).Draw(t, "weeks")
+		days := rapid.Uint64Max(10000).Draw(t, "days")
 		hours := rapid.Float64Range(0, 1000).Draw(t, "hours")
 		minutes := rapid.Float64Range(0, 1000).Draw(t, "minutes")
 		seconds := rapid.Float64Range(0, 1000).Draw(t, "seconds")
@@ -176,22 +190,36 @@ func TestNormalize(t *testing.T) {
 			Minutes: minutes,
 			Seconds: seconds,
 		}
-		actual := sut.Normalize()
-		if actual.Years == years {
-			// overflow
-			assert.Equal(t, actual.Months, months)
-		} else {
-			assert.Less(t, actual.Months, uint64(12))
+		actual, ok := sut.Normalize()
 
+		assert.True(t, ok)
+		assert.Less(t, actual.Months, uint64(12))
 			if months >= 12 {
 				assert.Greater(t, actual.Years, years)
 			} else {
 				assert.GreaterOrEqual(t, actual.Years, years)
 			}
-		}
 
 		assert.Less(t, actual.Hours, float64(24))
 		assert.Less(t, actual.Minutes, float64(60))
 		assert.Less(t, actual.Seconds, float64(60))
 	})
+
+	// オーバーフロー
+	_, ok = Duration{Years: math.MaxInt64, Months: 12}.Normalize()
+	assert.False(t, ok)
+	_, ok = Duration{Years: math.MaxInt64, Months: 11}.Normalize()
+	assert.True(t, ok)
+	_, ok = Duration{Days: math.MaxInt64, Hours: 24}.Normalize()
+	assert.False(t, ok)
+	_, ok = Duration{Days: math.MaxInt64, Hours: 23}.Normalize()
+	assert.True(t, ok)
+	_, ok = Duration{Hours: math.MaxInt64, Minutes: 60}.Normalize()
+	assert.False(t, ok)
+	_, ok = Duration{Hours: math.MaxInt64}.Normalize()
+	assert.True(t, ok)
+	_, ok = Duration{Hours: math.MaxInt64, Minutes: 59, Seconds: 60}.Normalize()
+	assert.False(t, ok)
+	_, ok = Duration{Hours: math.MaxInt64, Minutes: 59, Seconds: 59}.Normalize()
+	assert.True(t, ok)
 }

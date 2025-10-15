@@ -82,47 +82,44 @@ func (d Duration) Add(from time.Time) time.Time {
 }
 
 // Normalize 正規化する (24時間を1日/60分を1時間にする)
-func (d Duration) Normalize() Duration {
+func (d Duration) Normalize() (Duration, bool) {
 	// 秒
 	seconds := d.Seconds
 	minutes := math.Trunc(seconds / 60)
-	if math.MaxFloat64-d.Minutes < minutes {
+	if math.MaxInt64-d.Minutes < minutes {
 		// overflow
-		minutes = d.Minutes
-	} else {
+		return d, false
+	}
 		seconds -= minutes * 60
 		minutes += d.Minutes
-	}
 
 	// 分
 	hours := math.Trunc(minutes / 60)
-	if math.MaxFloat64-d.Hours < hours {
+	if math.MaxInt64-d.Hours < hours {
 		// overflow
-		hours = d.Hours
-	} else {
+		return d, false
+	}
 		minutes -= hours * 60
 		hours += d.Hours
-	}
 
 	// 時
 	days := uint64(hours / 24)
-	if math.MaxUint64-d.Days < days {
-		days = d.Days
-	} else {
+	if math.MaxInt64-d.Days < days {
+		// overflow
+		return d, false
+	}
 		hours -= float64(days * 24)
 		days += d.Days
-	}
 
 	// 月
 	months := d.Months
 	years := months / 12
-	if math.MaxUint64-d.Years < years {
+	if math.MaxInt64-d.Years < years {
 		// overflow
-		years = d.Years
-	} else {
+		return d, false
+	}
 		months -= years * 12
 		years += d.Years
-	}
 
 	return Duration{
 		Years:   years,
@@ -132,7 +129,7 @@ func (d Duration) Normalize() Duration {
 		Hours:   hours,
 		Minutes: minutes,
 		Seconds: seconds,
-	}
+	}, true
 }
 
 func (d *Duration) String() string {
