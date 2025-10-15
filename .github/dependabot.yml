@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    groups:
+      all:
+        patterns:
+          - "*"
+    schedule:
+      interval: "monthly"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    groups:
+      all:
+        patterns:
+          - "*"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    groups:
+      all:
+        patterns:
+          - "*"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
