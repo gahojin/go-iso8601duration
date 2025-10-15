@@ -2,9 +2,9 @@ package iso8601duration
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
 	"regexp"
 	"strconv"
@@ -27,6 +27,14 @@ var (
 
 	// ErrBadFormat フォーマット不正エラー
 	ErrBadFormat = errors.New("bad format string")
+)
+
+// 型チェック
+var (
+	_ encoding.TextMarshaler   = Duration{}
+	_ encoding.TextUnmarshaler = (*Duration)(nil)
+	_ json.Marshaler           = Duration{}
+	_ json.Unmarshaler         = (*Duration)(nil)
 )
 
 type Duration struct {
@@ -60,7 +68,6 @@ func (d Duration) Add(from time.Time) time.Time {
 		return r.Add(-1 * time.Duration(timeDuration))
 	} else {
 		r := from.AddDate(int(d.Years), int(d.Months), int(d.Weeks*7+d.Days))
-		fmt.Printf("sec: %f\n", d.Seconds)
 		return r.Add(time.Duration(timeDuration))
 	}
 }
@@ -108,6 +115,19 @@ func (d *Duration) String() string {
 	}
 
 	return builder.String()
+}
+
+func (d *Duration) UnmarshalText(data []byte) error {
+	t, err := ParseString(string(data))
+	if err != nil {
+		return err
+	}
+	*d = *t
+	return nil
+}
+
+func (d Duration) MarshalText() ([]byte, error) {
+	return []byte(d.String()), nil
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) error {

@@ -70,7 +70,31 @@ func TestParseString(t *testing.T) {
 	})
 }
 
-func TestJSON(t *testing.T) {
+func TestTextMarshal(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		expect := Duration{
+			Negative: rapid.Bool().Draw(t, "negative"),
+			Years:    rapid.Uint64().Draw(t, "years"),
+			Months:   rapid.Uint64().Draw(t, "months"),
+			Weeks:    rapid.Uint64().Draw(t, "weeks"),
+			Days:     rapid.Uint64().Draw(t, "days"),
+			Hours:    rapid.Float64Min(0).Draw(t, "hours"),
+			Minutes:  rapid.Float64Min(0).Draw(t, "minutes"),
+			Seconds:  rapid.Float64Min(0).Draw(t, "seconds"),
+		}
+
+		bytes, err := expect.MarshalText()
+		assert.Nil(t, err)
+		assert.NotNil(t, bytes)
+
+		var actual Duration
+		err = actual.UnmarshalText(bytes)
+		assert.Nil(t, err)
+		assert.Equal(t, expect, actual)
+	})
+}
+
+func TestJSONMarshal(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		expect := Duration{
 			Negative: rapid.Bool().Draw(t, "negative"),
