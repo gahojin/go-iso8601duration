@@ -5,7 +5,6 @@ import (
 	"encoding"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
 	"regexp"
 	"strconv"
@@ -119,7 +118,6 @@ func (d Duration) AddJapan(from time.Time) (*time.Time, error) {
 	}
 
 	// 年月を加算し、応当日があるか判断する
-	fmt.Printf("year = %v\n", d.Years)
 	target = target.AddDate(int(d.Years), int(d.Months), 0)
 	if target.Day() != from.Day() {
 		// 応当日がない場合、翌日にする
