@@ -48,18 +48,27 @@ type Duration struct {
 	Seconds  float64
 }
 
+// IsZero ゼロ値か
 func (d Duration) IsZero() bool {
 	return d.Years == 0 && d.Months == 0 && d.Weeks == 0 && d.Days == 0 && d.Hours == 0 && d.Minutes == 0 && d.Seconds == 0
 }
 
+// IsValid 許容範囲を超えていないか
 func (d Duration) IsValid() bool {
-	return d.Years <= math.MaxInt64 && d.Months <= math.MaxInt64 && d.Weeks <= math.MaxInt64 && d.Days <= math.MaxInt64 && d.Hours >= 0.0 && d.Minutes >= 0.0 && d.Seconds >= 0.0
+	return d.Years <= math.MaxInt64 && d.Months <= math.MaxInt64 && d.Weeks <= math.MaxInt64 && d.Days <= math.MaxInt64 && isFinite(d.Hours) && d.Hours >= 0.0 && isFinite(d.Minutes) && d.Minutes >= 0.0 && isFinite(d.Seconds) && d.Seconds >= 0.0
 }
 
+// HasDatePart 日付部を持っているか
+func (d Duration) HasDatePart() bool {
+	return d.Years >= 0 || d.Months > 0 || d.Weeks > 0 || d.Days > 0
+}
+
+// HasTimePart 時刻部を持っているか
 func (d Duration) HasTimePart() bool {
 	return d.Hours > 0.0 || d.Minutes > 0.0 || d.Seconds > 0.0
 }
 
+// Add 指定日時から期間分経過した日時を返す
 func (d Duration) Add(from time.Time) time.Time {
 	timeDuration := math.Round((d.Hours*60*60 + d.Minutes*60 + d.Seconds) * 1000 * 1000 * 1000)
 
@@ -217,6 +226,7 @@ func parseFloat(s string) (float64, error) {
 	return strconv.ParseFloat(strings.ReplaceAll(s, ",", "."), 64)
 }
 
+// ParseString 文字列をISO-8601 Duration書式としてパースする
 func ParseString(s string) (*Duration, error) {
 	groups := iso8601Pattern.FindStringSubmatch(s)
 	if groups == nil {
