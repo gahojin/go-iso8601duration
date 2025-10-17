@@ -61,44 +61,92 @@ type Duration struct {
 	Nanoseconds uint32
 }
 
+// Equal は値が一致するかを返す
 func (d Duration) Equal(other Duration) bool {
 	return d.Negative == d.Negative && d.Years == other.Years && d.Months == other.Months && d.Weeks == other.Weeks && d.Days == other.Days && d.Hours == other.Hours && d.Minutes == other.Minutes && d.Seconds == other.Seconds && d.Nanoseconds == other.Nanoseconds
 }
 
-// IsZero ゼロ値か
+// IsZero はゼロ値かを返す
 func (d Duration) IsZero() bool {
 	return d.Years == 0 && d.Months == 0 && d.Weeks == 0 && d.Days == 0 && d.Hours == 0 && d.Minutes == 0 && d.Seconds == 0 && d.Nanoseconds == 0
 }
 
-// IsValid 許容範囲を超えていないか
+// IsValid は許容範囲を超えていないかを返す
 func (d Duration) IsValid() bool {
 	return d.Years <= math.MaxInt32 && d.Months <= math.MaxInt32 && d.Weeks <= math.MaxInt32 && d.Days <= math.MaxInt32 && d.Hours <= math.MaxInt32 && d.Minutes <= math.MaxInt32 && d.Seconds <= math.MaxInt32 && d.Nanoseconds <= math.MaxInt32
 }
 
-// HasDatePart 日付部を持っているか
+// HasDatePart は日付部を持っているかを返す
 func (d Duration) HasDatePart() bool {
 	return d.Years > 0 || d.Months > 0 || d.Weeks > 0 || d.Days > 0
 }
 
-// HasTimePart 時刻部を持っているか
+// HasTimePart は時刻部を持っているかを返す
 func (d Duration) HasTimePart() bool {
 	return d.Hours > 0 || d.Minutes > 0 || d.Seconds > 0.0 || d.Nanoseconds > 0
 }
 
-// Add 指定日時から期間分経過した日時を返す
-func (d Duration) Add(from time.Time) time.Time {
+// Add は期間を合算する
+func (d Duration) Add(o Duration) (Duration, bool) {
+	// 正規化
+	t1, ok := d.Normalize()
+	if !ok {
+		return d, false
+	}
+	t2, ok := o.Normalize()
+	if !ok {
+		return d, false
+	}
+
+	// 年や日がオーバーフローしないか確認する
+	years1 := t1.Years
+	years2 := t2.Years
+	if years1 > math.MaxInt32-years2 {
+		return d, false
+	}
+	days1 := t1.Days
+	days2 := t2.Days
+	if days1 > math.MaxInt32-days2 {
+		return d, false
+	}
+
+	t1.Years += years2
+	t1.Months += o.Months
+	t1.Weeks += o.Weeks
+	t1.Days += days2
+	t1.Hours += o.Hours
+	t1.Minutes += o.Minutes
+	t1.Seconds += o.Seconds
+	t1.Nanoseconds += o.Nanoseconds
+
+	return t1.Normalize()
+}
+
+// Negate は期間の符号を反転させた新しい Duration を返す
+func (d Duration) Negate() Duration {
+	d.Negative = !d.Negative
+	return d
+}
+
+// Abs は期間の絶対値を返す
+func (d Duration) Abs() Duration {
+	d.Negative = false
+	return d
+}
+
+// AddTo は指定日時から期間分経過した日時を返す
+func (d Duration) AddTo(from time.Time) time.Time {
 	timeDuration := time.Duration(d.Hours)*time.Hour + time.Duration(d.Minutes)*time.Minute + time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanoseconds)
 
 	if d.Negative {
 		r := from.AddDate(-1*int(d.Years), -1*int(d.Months), -1*int(d.Weeks*7+d.Days))
 		return r.Add(-1 * timeDuration)
-	} else {
-		r := from.AddDate(int(d.Years), int(d.Months), int(d.Weeks*7+d.Days))
-		return r.Add(timeDuration)
 	}
+	r := from.AddDate(int(d.Years), int(d.Months), int(d.Weeks*7+d.Days))
+	return r.Add(timeDuration)
 }
 
-// AddJapan 指定日時から期間分経過した日時を返す (民法第139条,140条,141条,143条に準拠)
+// AddToJapan は指定日時から期間分経過した日時を返す (民法第139条,140条,141条,143条に準拠)
 // 計算方法が未定義であるため、マイナス期間はサポートしない
 // 民法第139条
 //   - 時間によって期間を定めたときは、その期間は、即時から起算する。
@@ -114,7 +162,7 @@ func (d Duration) Add(from time.Time) time.Time {
 //   - 週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。
 //   - 週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。
 //     ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。
-func (d Duration) AddJapan(from time.Time) (*time.Time, error) {
+func (d Duration) AddToJapan(from time.Time) (*time.Time, error) {
 	// マイナス期間はサポートしない
 	if d.Negative {
 		return nil, ErrUnsupportedNegative
@@ -161,7 +209,7 @@ func normalize(base, target *uint32, mod uint32) bool {
 	return true
 }
 
-// Normalize 正規化する (24時間を1日/60分を1時間にする)
+// Normalize は正規化を行う (ex. 24時間を1日/60分を1時間にするなど)
 func (d Duration) Normalize() (Duration, bool) {
 	r := d
 
@@ -298,7 +346,7 @@ func addFrac(base, frac decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
 	return base.Add(frac).QuoRem(one, 0)
 }
 
-// ParseString 文字列をISO-8601 Duration書式としてパースする
+// ParseString は文字列をISO-8601 Duration書式としてパースし、 Duration を返す
 func ParseString(s string) (*Duration, error) {
 	groups := iso8601Pattern.FindStringSubmatch(s)
 	if groups == nil {
