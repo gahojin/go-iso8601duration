@@ -168,15 +168,33 @@ func TestIsValid(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	dur, err := ParseString("P1Y2M3W4DT5H6M7.8S")
+	sut, err := ParseString("P1Y2M3W4DT5H6M7.8S")
+	assert.Nil(t, err)
+
+	actual, ok := sut.Add(*sut)
+	assert.True(t, ok)
+	assert.Equal(t, Duration{
+		Years:       2,
+		Months:      4,
+		Weeks:       6,
+		Days:        8,
+		Hours:       10,
+		Minutes:     12,
+		Seconds:     15,
+		Nanoseconds: 600 * 1000 * 1000,
+	}, actual)
+}
+
+func TestAddTo(t *testing.T) {
+	sut, err := ParseString("P1Y2M3W4DT5H6M7.8S")
 	assert.Nil(t, err)
 
 	base := time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC)
-	actual := dur.Add(base)
+	actual := sut.AddTo(base)
 	assert.Equal(t, time.Date(2026, 12, 10+21+4, 5, 6, 7, 800*1000*1000, time.UTC), actual)
 }
 
-func TestAddJapan(t *testing.T) {
+func TestAddToJapan(t *testing.T) {
 	tests := []struct {
 		from     string
 		duration string
@@ -258,9 +276,9 @@ func TestAddJapan(t *testing.T) {
 				fromTime, err = time.ParseInLocation("2006-01-02", tt.from, tz)
 			}
 			assert.Nil(t, err)
-			duration, err := ParseString(tt.duration)
+			sut, err := ParseString(tt.duration)
 			assert.Nil(t, err)
-			actual, err := duration.AddJapan(fromTime)
+			actual, err := sut.AddToJapan(fromTime)
 			assert.Nil(t, err)
 			expect, err := time.ParseInLocation("2006-01-02T15:04:05", tt.want, tz)
 			assert.Nil(t, err)
