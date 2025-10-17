@@ -293,53 +293,56 @@ func TestNormalize(t *testing.T) {
 
 	// プロパティテスト
 	rapid.Check(t, func(t *rapid.T) {
-		years := rapid.Uint64Max(10000).Draw(t, "years")
-		months := rapid.Uint64Max(10000).Draw(t, "months")
-		weeks := rapid.Uint64Max(10000).Draw(t, "weeks")
-		days := rapid.Uint64Max(10000).Draw(t, "days")
-		hours := rapid.Float64Range(0, 1000).Draw(t, "hours")
-		minutes := rapid.Float64Range(0, 1000).Draw(t, "minutes")
-		seconds := rapid.Float64Range(0, 1000).Draw(t, "seconds")
+		years := rapid.Uint32Max(math.MaxInt16).Draw(t, "years")
+		months := rapid.Uint32Max(math.MaxInt16).Draw(t, "months")
+		weeks := rapid.Uint32Max(math.MaxInt16).Draw(t, "weeks")
+		days := rapid.Uint32Max(math.MaxInt16).Draw(t, "days")
+		hours := rapid.Uint32Max(math.MaxInt16).Draw(t, "hours")
+		minutes := rapid.Uint32Max(math.MaxInt16).Draw(t, "minutes")
+		seconds := rapid.Uint32Max(math.MaxInt16).Draw(t, "seconds")
+		nanoseconds := rapid.Uint32Max(math.MaxInt16).Draw(t, "nanoseconds")
 
 		sut := Duration{
-			Years:   years,
-			Months:  months,
-			Weeks:   weeks,
-			Days:    days,
-			Hours:   hours,
-			Minutes: minutes,
-			Seconds: seconds,
+			Years:       years,
+			Months:      months,
+			Weeks:       weeks,
+			Days:        days,
+			Hours:       hours,
+			Minutes:     minutes,
+			Seconds:     seconds,
+			Nanoseconds: nanoseconds,
 		}
 		actual, ok := sut.Normalize()
 
 		assert.True(t, ok)
-		assert.Less(t, actual.Months, uint64(12))
+		assert.Less(t, actual.Months, uint32(12))
 		if months >= 12 {
 			assert.Greater(t, actual.Years, years)
 		} else {
 			assert.GreaterOrEqual(t, actual.Years, years)
 		}
 
-		assert.Less(t, actual.Hours, float64(24))
-		assert.Less(t, actual.Minutes, float64(60))
-		assert.Less(t, actual.Seconds, float64(60))
+		assert.Less(t, actual.Hours, uint32(24))
+		assert.Less(t, actual.Minutes, uint32(60))
+		assert.Less(t, actual.Seconds, uint32(60))
+		assert.Less(t, actual.Nanoseconds, uint32(1000*1000*1000))
 	})
 
 	// オーバーフロー
-	_, ok = Duration{Years: math.MaxInt64, Months: 12}.Normalize()
+	_, ok = Duration{Years: math.MaxInt32, Months: 12}.Normalize()
 	assert.False(t, ok)
-	_, ok = Duration{Years: math.MaxInt64, Months: 11}.Normalize()
+	_, ok = Duration{Years: math.MaxInt32, Months: 11}.Normalize()
 	assert.True(t, ok)
-	_, ok = Duration{Days: math.MaxInt64, Hours: 24}.Normalize()
+	_, ok = Duration{Days: math.MaxInt32, Hours: 24}.Normalize()
 	assert.False(t, ok)
-	_, ok = Duration{Days: math.MaxInt64, Hours: 23}.Normalize()
+	_, ok = Duration{Days: math.MaxInt32, Hours: 23}.Normalize()
 	assert.True(t, ok)
-	_, ok = Duration{Hours: math.MaxInt64, Minutes: 60}.Normalize()
-	assert.False(t, ok)
-	_, ok = Duration{Hours: math.MaxInt64}.Normalize()
+	actual, ok = Duration{Hours: math.MaxInt32, Minutes: 60}.Normalize()
 	assert.True(t, ok)
-	_, ok = Duration{Hours: math.MaxInt64, Minutes: 59, Seconds: 60}.Normalize()
-	assert.False(t, ok)
-	_, ok = Duration{Hours: math.MaxInt64, Minutes: 59, Seconds: 59}.Normalize()
+	assert.Equal(t, Duration{Days: math.MaxInt32 / 24, Hours: math.MaxInt32%24 + 1, Minutes: 0}, actual)
+	actual, ok = Duration{Hours: math.MaxInt32, Minutes: 59, Seconds: 60}.Normalize()
+	assert.True(t, ok)
+	assert.Equal(t, Duration{Days: math.MaxInt32 / 24, Hours: math.MaxInt32%24 + 1, Minutes: 0}, actual)
+	_, ok = Duration{Hours: math.MaxInt32, Minutes: 59, Seconds: 59}.Normalize()
 	assert.True(t, ok)
 }

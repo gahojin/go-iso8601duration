@@ -150,69 +150,50 @@ func (d Duration) AddJapan(from time.Time) (*time.Time, error) {
 	return &target, nil
 }
 
+func normalize(base, target *uint32, mod uint32) bool {
+	t := *target / mod
+	if *base > math.MaxInt32-t {
+		// overflow
+		return false
+	}
+	*base = *base + t
+	*target = *target % mod
+	return true
+}
+
 // Normalize 正規化する (24時間を1日/60分を1時間にする)
 func (d Duration) Normalize() (Duration, bool) {
-	// 秒
-	seconds := d.Seconds
-	t := uint32(time.Duration(d.Nanoseconds) / time.Second)
-	if seconds > math.MaxInt32-t {
-		// overflow
-		return d, false
-	}
-	seconds += t
-	nanoseconds := uint32(time.Duration(d.Nanoseconds) % time.Second)
+	r := d
 
-	// 分
-	minutes := d.Minutes
-	t = seconds / 60
-	if minutes > math.MaxInt32-t {
-		// overflow
-		return d, false
-	}
-	minutes += t
-	seconds = seconds % 60
+	// 4回正規処理を行う (日 <- 時 <- 分 <- 秒 <- ナノ秒)
+	for step := 0; step < 4; step++ {
+		// 年
+		if ok := normalize(&r.Years, &r.Months, 12); !ok {
+			return d, false
+		}
 
-	// 時
-	hours := d.Hours
-	t = minutes / 60
-	if hours > math.MaxInt32-t {
-		// overflow
-		return d, false
-	}
-	hours += t
-	minutes = minutes % 60
+		// 日
+		if ok := normalize(&r.Days, &r.Hours, 24); !ok {
+			return d, false
+		}
 
-	// 日
-	days := d.Days
-	t = hours / 24
-	if days > math.MaxInt32-t {
-		// overflow
-		return d, false
-	}
-	days += t
-	hours = hours % 24
+		// 時
+		if ok := normalize(&r.Hours, &r.Minutes, 60); !ok {
+			return d, false
+		}
 
-	// 月
-	months := d.Months
-	years := d.Years
-	t = months / 12
-	if years > math.MaxInt32-t {
-		// overflow
-		return d, false
-	}
-	years += t
-	months = months % 12
+		// 分
+		if ok := normalize(&r.Minutes, &r.Seconds, 60); !ok {
+			return d, false
+		}
 
-	return Duration{
-		Years:       years,
-		Months:      months,
-		Weeks:       d.Weeks,
-		Days:        days,
-		Hours:       hours,
-		Minutes:     minutes,
-		Seconds:     seconds,
-		Nanoseconds: nanoseconds,
-	}, true
+		// 秒
+		if ok := normalize(&r.Seconds, &r.Nanoseconds, 1000*1000*1000); !ok {
+			return d, false
+		}
+	}
+
+	return r, true
 }
 
 func (d *Duration) String() string {
