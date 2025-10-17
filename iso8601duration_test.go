@@ -36,14 +36,26 @@ func TestParseString(t *testing.T) {
 	assert.Equal(t, "P12Y10M3W", actual.String())
 	assert.False(t, actual.HasTimePart())
 
+	// 年に小数部を含む
+	actual, err = ParseString("P0.5Y")
+	assert.Nil(t, err)
+	assert.Equal(t, "P6M", actual.String())
+
+	// 日に小数部を含む
+	actual, err = ParseString("P0.5D")
+	assert.Nil(t, err)
+	assert.Equal(t, "PT12H", actual.String())
+
 	// 時刻に小数部を含む
+	// 0.34h -> 20.4m -> 20m + 24s
+	// 0.78m -> 46.8s
 	actual, err = ParseString("PT12.34H56.78M9.01S")
 	assert.Nil(t, err)
-	assert.Equal(t, "PT12.34H56.78M9.01S", actual.String())
+	assert.Equal(t, "PT12H77M19.81S", actual.String())
 	assert.True(t, actual.HasTimePart())
 	actual, err = ParseString("PT12,34H56,78M9,01S")
 	assert.Nil(t, err)
-	assert.Equal(t, "PT12.34H56.78M9.01S", actual.String())
+	assert.Equal(t, "PT12H77M19.81S", actual.String())
 	assert.True(t, actual.HasTimePart())
 
 	// マイナス
@@ -56,18 +68,22 @@ func TestParseString(t *testing.T) {
 	// プロパティテスト
 	rapid.Check(t, func(t *rapid.T) {
 		expect := Duration{
-			Negative: rapid.Bool().Draw(t, "negative"),
-			Years:    rapid.Uint64().Draw(t, "years"),
-			Months:   rapid.Uint64().Draw(t, "months"),
-			Weeks:    rapid.Uint64().Draw(t, "weeks"),
-			Days:     rapid.Uint64().Draw(t, "days"),
-			Hours:    rapid.Float64Min(0).Draw(t, "hours"),
-			Minutes:  rapid.Float64Min(0).Draw(t, "minutes"),
-			Seconds:  rapid.Float64Min(0).Draw(t, "seconds"),
+			Negative:    rapid.Bool().Draw(t, "negative"),
+			Years:       rapid.Uint32().Draw(t, "years"),
+			Months:      rapid.Uint32().Draw(t, "months"),
+			Weeks:       rapid.Uint32().Draw(t, "weeks"),
+			Days:        rapid.Uint32().Draw(t, "days"),
+			Hours:       rapid.Uint32().Draw(t, "hours"),
+			Minutes:     rapid.Uint32().Draw(t, "minutes"),
+			Seconds:     rapid.Uint32().Draw(t, "seconds"),
+			Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
 		}
 
 		actual, err = ParseString(expect.String())
 		assert.Nil(t, err)
+		// ナノ秒のうち、秒単位の桁は、秒に加算する
+		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
+		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
 		assert.Equal(t, expect, *actual)
 	})
 }
@@ -75,14 +91,15 @@ func TestParseString(t *testing.T) {
 func TestTextMarshal(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		expect := Duration{
-			Negative: rapid.Bool().Draw(t, "negative"),
-			Years:    rapid.Uint64().Draw(t, "years"),
-			Months:   rapid.Uint64().Draw(t, "months"),
-			Weeks:    rapid.Uint64().Draw(t, "weeks"),
-			Days:     rapid.Uint64().Draw(t, "days"),
-			Hours:    rapid.Float64Min(0).Draw(t, "hours"),
-			Minutes:  rapid.Float64Min(0).Draw(t, "minutes"),
-			Seconds:  rapid.Float64Min(0).Draw(t, "seconds"),
+			Negative:    rapid.Bool().Draw(t, "negative"),
+			Years:       rapid.Uint32().Draw(t, "years"),
+			Months:      rapid.Uint32().Draw(t, "months"),
+			Weeks:       rapid.Uint32().Draw(t, "weeks"),
+			Days:        rapid.Uint32().Draw(t, "days"),
+			Hours:       rapid.Uint32().Draw(t, "hours"),
+			Minutes:     rapid.Uint32().Draw(t, "minutes"),
+			Seconds:     rapid.Uint32().Draw(t, "seconds"),
+			Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
 		}
 
 		bytes, err := expect.MarshalText()
@@ -92,6 +109,9 @@ func TestTextMarshal(t *testing.T) {
 		var actual Duration
 		err = actual.UnmarshalText(bytes)
 		assert.Nil(t, err)
+		// ナノ秒のうち、秒単位の桁は、秒に加算する
+		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
+		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
 		assert.Equal(t, expect, actual)
 	})
 }
@@ -99,14 +119,15 @@ func TestTextMarshal(t *testing.T) {
 func TestJSONMarshal(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		expect := Duration{
-			Negative: rapid.Bool().Draw(t, "negative"),
-			Years:    rapid.Uint64().Draw(t, "years"),
-			Months:   rapid.Uint64().Draw(t, "months"),
-			Weeks:    rapid.Uint64().Draw(t, "weeks"),
-			Days:     rapid.Uint64().Draw(t, "days"),
-			Hours:    rapid.Float64Min(0).Draw(t, "hours"),
-			Minutes:  rapid.Float64Min(0).Draw(t, "minutes"),
-			Seconds:  rapid.Float64Min(0).Draw(t, "seconds"),
+			Negative:    rapid.Bool().Draw(t, "negative"),
+			Years:       rapid.Uint32().Draw(t, "years"),
+			Months:      rapid.Uint32().Draw(t, "months"),
+			Weeks:       rapid.Uint32().Draw(t, "weeks"),
+			Days:        rapid.Uint32().Draw(t, "days"),
+			Hours:       rapid.Uint32().Draw(t, "hours"),
+			Minutes:     rapid.Uint32().Draw(t, "minutes"),
+			Seconds:     rapid.Uint32().Draw(t, "seconds"),
+			Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
 		}
 
 		bytes, err := json.Marshal(expect)
@@ -116,6 +137,9 @@ func TestJSONMarshal(t *testing.T) {
 		var actual Duration
 		err = json.Unmarshal(bytes, &actual)
 		assert.Nil(t, err)
+		// ナノ秒のうち、秒単位の桁は、秒に加算する
+		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
+		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
 		assert.Equal(t, expect, actual)
 	})
 }
@@ -124,17 +148,18 @@ func TestIsValid(t *testing.T) {
 	// プロパティテスト
 	rapid.Check(t, func(t *rapid.T) {
 		sut := Duration{
-			Negative: rapid.Bool().Draw(t, "negative"),
-			Years:    rapid.Uint64().Draw(t, "years"),
-			Months:   rapid.Uint64().Draw(t, "months"),
-			Weeks:    rapid.Uint64().Draw(t, "weeks"),
-			Days:     rapid.Uint64().Draw(t, "days"),
-			Hours:    rapid.Float64().Draw(t, "hours"),
-			Minutes:  rapid.Float64().Draw(t, "minutes"),
-			Seconds:  rapid.Float64().Draw(t, "seconds"),
+			Negative:    rapid.Bool().Draw(t, "negative"),
+			Years:       rapid.Uint32().Draw(t, "years"),
+			Months:      rapid.Uint32().Draw(t, "months"),
+			Weeks:       rapid.Uint32().Draw(t, "weeks"),
+			Days:        rapid.Uint32().Draw(t, "days"),
+			Hours:       rapid.Uint32().Draw(t, "hours"),
+			Minutes:     rapid.Uint32().Draw(t, "minutes"),
+			Seconds:     rapid.Uint32().Draw(t, "seconds"),
+			Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
 		}
 
-		if sut.Years > math.MaxInt64 || sut.Months > math.MaxInt64 || sut.Weeks > math.MaxInt64 || sut.Days > math.MaxInt64 || sut.Hours < 0.0 || sut.Minutes < 0.0 || sut.Seconds < 0.0 {
+		if sut.Years > math.MaxInt32 || sut.Months > math.MaxInt32 || sut.Weeks > math.MaxInt32 || sut.Days > math.MaxInt32 || sut.Hours > math.MaxInt32 || sut.Minutes > math.MaxInt32 || sut.Seconds > math.MaxInt32 || sut.Nanoseconds > math.MaxInt32 {
 			assert.False(t, sut.IsValid())
 		} else {
 			assert.True(t, sut.IsValid())
@@ -244,18 +269,6 @@ func TestAddJapan(t *testing.T) {
 	}
 }
 
-func TestA(t *testing.T) {
-	tz := time.FixedZone("Asia/Tokyo", 9*60*60)
-	fromTime, err := time.ParseInLocation("2006-01-02", "2020-08-31", tz)
-	assert.Nil(t, err)
-	duration, err := ParseString("P1Y1M")
-	assert.Nil(t, err)
-	actual, err := duration.AddJapan(fromTime)
-
-	fmt.Printf("fromTime = %v\n", fromTime)
-	fmt.Printf("actual = %v\n", actual)
-}
-
 func TestNormalize(t *testing.T) {
 	// 境界チェック
 	actual, ok := Duration{Months: 12}.Normalize()
@@ -280,53 +293,56 @@ func TestNormalize(t *testing.T) {
 
 	// プロパティテスト
 	rapid.Check(t, func(t *rapid.T) {
-		years := rapid.Uint64Max(10000).Draw(t, "years")
-		months := rapid.Uint64Max(10000).Draw(t, "months")
-		weeks := rapid.Uint64Max(10000).Draw(t, "weeks")
-		days := rapid.Uint64Max(10000).Draw(t, "days")
-		hours := rapid.Float64Range(0, 1000).Draw(t, "hours")
-		minutes := rapid.Float64Range(0, 1000).Draw(t, "minutes")
-		seconds := rapid.Float64Range(0, 1000).Draw(t, "seconds")
+		years := rapid.Uint32Max(math.MaxInt16).Draw(t, "years")
+		months := rapid.Uint32Max(math.MaxInt16).Draw(t, "months")
+		weeks := rapid.Uint32Max(math.MaxInt16).Draw(t, "weeks")
+		days := rapid.Uint32Max(math.MaxInt16).Draw(t, "days")
+		hours := rapid.Uint32Max(math.MaxInt16).Draw(t, "hours")
+		minutes := rapid.Uint32Max(math.MaxInt16).Draw(t, "minutes")
+		seconds := rapid.Uint32Max(math.MaxInt16).Draw(t, "seconds")
+		nanoseconds := rapid.Uint32Max(math.MaxInt16).Draw(t, "nanoseconds")
 
 		sut := Duration{
-			Years:   years,
-			Months:  months,
-			Weeks:   weeks,
-			Days:    days,
-			Hours:   hours,
-			Minutes: minutes,
-			Seconds: seconds,
+			Years:       years,
+			Months:      months,
+			Weeks:       weeks,
+			Days:        days,
+			Hours:       hours,
+			Minutes:     minutes,
+			Seconds:     seconds,
+			Nanoseconds: nanoseconds,
 		}
 		actual, ok := sut.Normalize()
 
 		assert.True(t, ok)
-		assert.Less(t, actual.Months, uint64(12))
+		assert.Less(t, actual.Months, uint32(12))
 		if months >= 12 {
 			assert.Greater(t, actual.Years, years)
 		} else {
 			assert.GreaterOrEqual(t, actual.Years, years)
 		}
 
-		assert.Less(t, actual.Hours, float64(24))
-		assert.Less(t, actual.Minutes, float64(60))
-		assert.Less(t, actual.Seconds, float64(60))
+		assert.Less(t, actual.Hours, uint32(24))
+		assert.Less(t, actual.Minutes, uint32(60))
+		assert.Less(t, actual.Seconds, uint32(60))
+		assert.Less(t, actual.Nanoseconds, uint32(1000*1000*1000))
 	})
 
 	// オーバーフロー
-	_, ok = Duration{Years: math.MaxInt64, Months: 12}.Normalize()
+	_, ok = Duration{Years: math.MaxInt32, Months: 12}.Normalize()
 	assert.False(t, ok)
-	_, ok = Duration{Years: math.MaxInt64, Months: 11}.Normalize()
+	_, ok = Duration{Years: math.MaxInt32, Months: 11}.Normalize()
 	assert.True(t, ok)
-	_, ok = Duration{Days: math.MaxInt64, Hours: 24}.Normalize()
+	_, ok = Duration{Days: math.MaxInt32, Hours: 24}.Normalize()
 	assert.False(t, ok)
-	_, ok = Duration{Days: math.MaxInt64, Hours: 23}.Normalize()
+	_, ok = Duration{Days: math.MaxInt32, Hours: 23}.Normalize()
 	assert.True(t, ok)
-	_, ok = Duration{Hours: math.MaxInt64, Minutes: 60}.Normalize()
-	assert.False(t, ok)
-	_, ok = Duration{Hours: math.MaxInt64}.Normalize()
+	actual, ok = Duration{Hours: math.MaxInt32, Minutes: 60}.Normalize()
 	assert.True(t, ok)
-	_, ok = Duration{Hours: math.MaxInt64, Minutes: 59, Seconds: 60}.Normalize()
-	assert.False(t, ok)
-	_, ok = Duration{Hours: math.MaxInt64, Minutes: 59, Seconds: 59}.Normalize()
+	assert.Equal(t, Duration{Days: math.MaxInt32 / 24, Hours: math.MaxInt32%24 + 1, Minutes: 0}, actual)
+	actual, ok = Duration{Hours: math.MaxInt32, Minutes: 59, Seconds: 60}.Normalize()
+	assert.True(t, ok)
+	assert.Equal(t, Duration{Days: math.MaxInt32 / 24, Hours: math.MaxInt32%24 + 1, Minutes: 0}, actual)
+	_, ok = Duration{Hours: math.MaxInt32, Minutes: 59, Seconds: 59}.Normalize()
 	assert.True(t, ok)
 }

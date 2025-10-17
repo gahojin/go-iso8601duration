@@ -10,13 +10,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // 小数点を持つ数値
 const fractionalNumbers = `\d+(?:[\.,]\d+)?`
 
 // 日付部
-const datePattern = `(?:(?P<year>\d+)Y)?(?:(?P<month>\d+)M)?(?:(?P<week>\d+)W)?(?:(?P<day>\d+)D)?`
+const datePattern = "(?:(?P<year>" + fractionalNumbers + ")Y)?(?:(?P<month>" + fractionalNumbers + `)M)?(?:(?P<week>\d+)W)?(?:(?P<day>` + fractionalNumbers + ")D)?"
 
 // 時刻部
 const timePattern = "T(?:(?P<hour>" + fractionalNumbers + ")H)?(?:(?P<minute>" + fractionalNumbers + ")M)?(?:(?P<second>" + fractionalNumbers + ")S)?"
@@ -30,6 +32,13 @@ var (
 
 	// ErrUnsupportedNegative マイナス期間未サポート
 	ErrUnsupportedNegative = errors.New("unsupported negative duration")
+
+	one                   = decimal.NewFromInt(1)
+	monthsPerYear         = decimal.NewFromInt(12)
+	hoursPerDay           = decimal.NewFromInt(24)
+	minutesPerHour        = decimal.NewFromInt(60)
+	secondsPerMinute      = decimal.NewFromInt(60)
+	nanosecondsPerSeconds = decimal.NewFromUint64(uint64(time.Second))
 )
 
 // 型チェック
@@ -41,46 +50,51 @@ var (
 )
 
 type Duration struct {
-	Negative bool
-	Years    uint64
-	Months   uint64
-	Weeks    uint64
-	Days     uint64
-	Hours    float64
-	Minutes  float64
-	Seconds  float64
+	Negative    bool
+	Years       uint32
+	Months      uint32
+	Weeks       uint32
+	Days        uint32
+	Hours       uint32
+	Minutes     uint32
+	Seconds     uint32
+	Nanoseconds uint32
+}
+
+func (d Duration) Equal(other Duration) bool {
+	return d.Negative == d.Negative && d.Years == other.Years && d.Months == other.Months && d.Weeks == other.Weeks && d.Days == other.Days && d.Hours == other.Hours && d.Minutes == other.Minutes && d.Seconds == other.Seconds && d.Nanoseconds == other.Nanoseconds
 }
 
 // IsZero ゼロ値か
 func (d Duration) IsZero() bool {
-	return d.Years == 0 && d.Months == 0 && d.Weeks == 0 && d.Days == 0 && d.Hours == 0 && d.Minutes == 0 && d.Seconds == 0
+	return d.Years == 0 && d.Months == 0 && d.Weeks == 0 && d.Days == 0 && d.Hours == 0 && d.Minutes == 0 && d.Seconds == 0 && d.Nanoseconds == 0
 }
 
 // IsValid 許容範囲を超えていないか
 func (d Duration) IsValid() bool {
-	return d.Years <= math.MaxInt64 && d.Months <= math.MaxInt64 && d.Weeks <= math.MaxInt64 && d.Days <= math.MaxInt64 && isFinite(d.Hours) && d.Hours >= 0.0 && isFinite(d.Minutes) && d.Minutes >= 0.0 && isFinite(d.Seconds) && d.Seconds >= 0.0
+	return d.Years <= math.MaxInt32 && d.Months <= math.MaxInt32 && d.Weeks <= math.MaxInt32 && d.Days <= math.MaxInt32 && d.Hours <= math.MaxInt32 && d.Minutes <= math.MaxInt32 && d.Seconds <= math.MaxInt32 && d.Nanoseconds <= math.MaxInt32
 }
 
 // HasDatePart 日付部を持っているか
 func (d Duration) HasDatePart() bool {
-	return d.Years >= 0 || d.Months > 0 || d.Weeks > 0 || d.Days > 0
+	return d.Years > 0 || d.Months > 0 || d.Weeks > 0 || d.Days > 0
 }
 
 // HasTimePart 時刻部を持っているか
 func (d Duration) HasTimePart() bool {
-	return d.Hours > 0.0 || d.Minutes > 0.0 || d.Seconds > 0.0
+	return d.Hours > 0 || d.Minutes > 0 || d.Seconds > 0.0 || d.Nanoseconds > 0
 }
 
 // Add 指定日時から期間分経過した日時を返す
 func (d Duration) Add(from time.Time) time.Time {
-	timeDuration := math.Round((d.Hours*60*60 + d.Minutes*60 + d.Seconds) * 1000 * 1000 * 1000)
+	timeDuration := time.Duration(d.Hours)*time.Hour + time.Duration(d.Minutes)*time.Minute + time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanoseconds)
 
 	if d.Negative {
 		r := from.AddDate(-1*int(d.Years), -1*int(d.Months), -1*int(d.Weeks*7+d.Days))
-		return r.Add(-1 * time.Duration(timeDuration))
+		return r.Add(-1 * timeDuration)
 	} else {
 		r := from.AddDate(int(d.Years), int(d.Months), int(d.Weeks*7+d.Days))
-		return r.Add(time.Duration(timeDuration))
+		return r.Add(timeDuration)
 	}
 }
 
@@ -131,60 +145,55 @@ func (d Duration) AddJapan(from time.Time) (*time.Time, error) {
 		target = target.AddDate(0, 0, int(d.Days+d.Weeks*7))
 	}
 
-	timeDuration := math.Round((d.Hours*60*60 + d.Minutes*60 + d.Seconds) * 1000 * 1000 * 1000)
-	target = target.Add(time.Duration(timeDuration))
+	timeDuration := time.Duration(d.Hours)*time.Hour + time.Duration(d.Minutes)*time.Minute + time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanoseconds)
+	target = target.Add(timeDuration)
 	return &target, nil
+}
+
+func normalize(base, target *uint32, mod uint32) bool {
+	t := *target / mod
+	if *base > math.MaxInt32-t {
+		// overflow
+		return false
+	}
+	*base = *base + t
+	*target = *target % mod
+	return true
 }
 
 // Normalize 正規化する (24時間を1日/60分を1時間にする)
 func (d Duration) Normalize() (Duration, bool) {
-	// 秒
-	seconds := d.Seconds
-	minutes := math.Trunc(seconds / 60)
-	if math.MaxInt64-d.Minutes < minutes {
-		// overflow
-		return d, false
-	}
-	seconds -= minutes * 60
-	minutes += d.Minutes
+	r := d
 
-	// 分
-	hours := math.Trunc(minutes / 60)
-	if math.MaxInt64-d.Hours < hours {
-		// overflow
-		return d, false
-	}
-	minutes -= hours * 60
-	hours += d.Hours
+	// 4回正規処理を行う (日 <- 時 <- 分 <- 秒 <- ナノ秒)
+	for step := 0; step < 4; step++ {
+		// 年
+		if ok := normalize(&r.Years, &r.Months, 12); !ok {
+			return d, false
+		}
 
-	// 時
-	days := uint64(hours / 24)
-	if math.MaxInt64-d.Days < days {
-		// overflow
-		return d, false
-	}
-	hours -= float64(days * 24)
-	days += d.Days
+		// 日
+		if ok := normalize(&r.Days, &r.Hours, 24); !ok {
+			return d, false
+		}
 
-	// 月
-	months := d.Months
-	years := months / 12
-	if math.MaxInt64-d.Years < years {
-		// overflow
-		return d, false
-	}
-	months -= years * 12
-	years += d.Years
+		// 時
+		if ok := normalize(&r.Hours, &r.Minutes, 60); !ok {
+			return d, false
+		}
 
-	return Duration{
-		Years:   years,
-		Months:  months,
-		Weeks:   d.Weeks,
-		Days:    days,
-		Hours:   hours,
-		Minutes: minutes,
-		Seconds: seconds,
-	}, true
+		// 分
+		if ok := normalize(&r.Minutes, &r.Seconds, 60); !ok {
+			return d, false
+		}
+
+		// 秒
+		if ok := normalize(&r.Seconds, &r.Nanoseconds, 1000*1000*1000); !ok {
+			return d, false
+		}
+	}
+
+	return r, true
 }
 
 func (d *Duration) String() string {
@@ -198,33 +207,42 @@ func (d *Duration) String() string {
 	}
 	builder.WriteByte('P')
 	if d.Years != 0 {
-		builder.WriteString(strconv.FormatUint(d.Years, 10))
+		builder.WriteString(strconv.FormatUint(uint64(d.Years), 10))
 		builder.WriteByte('Y')
 	}
 	if d.Months != 0 {
-		builder.WriteString(strconv.FormatUint(d.Months, 10))
+		builder.WriteString(strconv.FormatUint(uint64(d.Months), 10))
 		builder.WriteByte('M')
 	}
 	if d.Weeks != 0 {
-		builder.WriteString(strconv.FormatUint(d.Weeks, 10))
+		builder.WriteString(strconv.FormatUint(uint64(d.Weeks), 10))
 		builder.WriteByte('W')
 	}
 	if d.Days != 0 {
-		builder.WriteString(strconv.FormatUint(d.Days, 10))
+		builder.WriteString(strconv.FormatUint(uint64(d.Days), 10))
 		builder.WriteByte('D')
 	}
 	if d.HasTimePart() {
 		builder.WriteByte('T')
-		if d.Hours > 0.0 && isFinite(d.Hours) {
-			builder.WriteString(strconv.FormatFloat(d.Hours, 'f', -1, 64))
+		if d.Hours != 0 {
+			builder.WriteString(strconv.FormatUint(uint64(d.Hours), 10))
 			builder.WriteByte('H')
 		}
-		if d.Minutes > 0.0 && isFinite(d.Minutes) {
-			builder.WriteString(strconv.FormatFloat(d.Minutes, 'f', -1, 64))
+		if d.Minutes != 0 {
+			builder.WriteString(strconv.FormatUint(uint64(d.Minutes), 10))
 			builder.WriteByte('M')
 		}
-		if d.Seconds > 0.0 && isFinite(d.Seconds) {
-			builder.WriteString(strconv.FormatFloat(d.Seconds, 'f', -1, 64))
+		if d.Nanoseconds != 0 {
+			// 小数以下
+			sec, nano := decimal.NewFromUint64(uint64(d.Nanoseconds)).QuoRem(nanosecondsPerSeconds, 0)
+			nanoStr := nano.String()
+			builder.WriteString(sec.Add(decimal.NewFromUint64(uint64(d.Seconds))).String())
+			builder.WriteByte('.')
+			builder.Write(bytes.Repeat([]byte{'0'}, 9-len(nanoStr)))
+			builder.WriteString(strings.TrimRight(nanoStr, "0"))
+			builder.WriteByte('S')
+		} else if d.Seconds != 0 {
+			builder.WriteString(strconv.FormatUint(uint64(d.Seconds), 10))
 			builder.WriteByte('S')
 		}
 	}
@@ -236,6 +254,9 @@ func (d *Duration) UnmarshalText(data []byte) error {
 	t, err := ParseString(string(data))
 	if err != nil {
 		return err
+	}
+	if t == nil {
+		return ErrBadFormat
 	}
 	*d = *t
 	return nil
@@ -255,6 +276,9 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	if t == nil {
+		return ErrBadFormat
+	}
 	*d = *t
 	return nil
 }
@@ -270,12 +294,8 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func isFinite(n float64) bool {
-	return !math.IsNaN(n) && !math.IsInf(n, 0)
-}
-
-func parseFloat(s string) (float64, error) {
-	return strconv.ParseFloat(strings.ReplaceAll(s, ",", "."), 64)
+func addFrac(base, frac decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
+	return base.Add(frac).QuoRem(one, 0)
 }
 
 // ParseString 文字列をISO-8601 Duration書式としてパースする
@@ -286,7 +306,10 @@ func ParseString(s string) (*Duration, error) {
 	}
 
 	var err error
-	d := &Duration{}
+	var negative bool
+	var years, months, days, hours, minutes, seconds decimal.Decimal
+	var yearsFrac, monthsFrac, daysFrac, hoursFrac, minutesFrac, secondsFrac decimal.Decimal
+	var weeks uint64
 
 	for i, name := range iso8601Pattern.SubexpNames() {
 		if i == 0 || name == "" {
@@ -297,30 +320,54 @@ func ParseString(s string) (*Duration, error) {
 		if part == "" {
 			continue
 		}
+		// パース処理を行えるよう、カンマをドットに変換する
+		part = strings.ReplaceAll(part, ",", ".")
 
 		switch name {
 		case "negative":
-			d.Negative = part == "-"
+			negative = part == "-"
 		case "year":
-			d.Years, err = strconv.ParseUint(part, 10, 64)
+			years, err = decimal.NewFromString(part)
 		case "month":
-			d.Months, err = strconv.ParseUint(part, 10, 64)
+			months, err = decimal.NewFromString(part)
 		case "week":
-			d.Weeks, err = strconv.ParseUint(part, 10, 64)
+			weeks, err = strconv.ParseUint(part, 10, 32)
 		case "day":
-			d.Days, err = strconv.ParseUint(part, 10, 64)
+			days, err = decimal.NewFromString(part)
 		case "hour":
-			d.Hours, err = parseFloat(part)
+			hours, err = decimal.NewFromString(part)
 		case "minute":
-			d.Minutes, err = parseFloat(part)
+			minutes, err = decimal.NewFromString(part)
 		case "second":
-			d.Seconds, err = parseFloat(part)
+			seconds, err = decimal.NewFromString(part)
 		}
-
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return d, nil
+	years, yearsFrac = addFrac(years, decimal.Zero)
+	months, monthsFrac = addFrac(months, yearsFrac.Mul(monthsPerYear))
+	if monthsFrac.GreaterThan(decimal.Zero) {
+		// 日に換算出来ないため、月の部分に小数は使用出来ない
+		return nil, errors.Join(ErrBadFormat, errors.New("fractions aren't supported for the month-position"))
+	}
+
+	days, daysFrac = addFrac(days, decimal.Zero)
+	hours, hoursFrac = addFrac(hours, daysFrac.Mul(hoursPerDay))
+	minutes, minutesFrac = addFrac(minutes, hoursFrac.Mul(minutesPerHour))
+	seconds, secondsFrac = addFrac(seconds, minutesFrac.Mul(secondsPerMinute))
+	nanoSeconds := secondsFrac.Mul(nanosecondsPerSeconds)
+
+	return &Duration{
+		Negative:    negative,
+		Years:       uint32(years.IntPart()),
+		Months:      uint32(months.IntPart()),
+		Weeks:       uint32(weeks),
+		Days:        uint32(days.IntPart()),
+		Hours:       uint32(hours.IntPart()),
+		Minutes:     uint32(minutes.IntPart()),
+		Seconds:     uint32(seconds.IntPart()),
+		Nanoseconds: uint32(nanoSeconds.IntPart()),
+	}, nil
 }
