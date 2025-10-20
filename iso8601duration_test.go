@@ -1,7 +1,6 @@
 package iso8601duration
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -85,62 +84,6 @@ func TestParseString(t *testing.T) {
 		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
 		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
 		assert.Equal(t, expect, *actual)
-	})
-}
-
-func TestTextMarshal(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		expect := Duration{
-			Negative:    rapid.Bool().Draw(t, "negative"),
-			Years:       rapid.Uint32().Draw(t, "years"),
-			Months:      rapid.Uint32().Draw(t, "months"),
-			Weeks:       rapid.Uint32().Draw(t, "weeks"),
-			Days:        rapid.Uint32().Draw(t, "days"),
-			Hours:       rapid.Uint32().Draw(t, "hours"),
-			Minutes:     rapid.Uint32().Draw(t, "minutes"),
-			Seconds:     rapid.Uint32().Draw(t, "seconds"),
-			Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
-		}
-
-		bytes, err := expect.MarshalText()
-		assert.Nil(t, err)
-		assert.NotNil(t, bytes)
-
-		var actual Duration
-		err = actual.UnmarshalText(bytes)
-		assert.Nil(t, err)
-		// ナノ秒のうち、秒単位の桁は、秒に加算する
-		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
-		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
-		assert.Equal(t, expect, actual)
-	})
-}
-
-func TestJSONMarshal(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		expect := Duration{
-			Negative:    rapid.Bool().Draw(t, "negative"),
-			Years:       rapid.Uint32().Draw(t, "years"),
-			Months:      rapid.Uint32().Draw(t, "months"),
-			Weeks:       rapid.Uint32().Draw(t, "weeks"),
-			Days:        rapid.Uint32().Draw(t, "days"),
-			Hours:       rapid.Uint32().Draw(t, "hours"),
-			Minutes:     rapid.Uint32().Draw(t, "minutes"),
-			Seconds:     rapid.Uint32().Draw(t, "seconds"),
-			Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
-		}
-
-		bytes, err := json.Marshal(expect)
-		assert.Nil(t, err)
-		assert.NotNil(t, bytes)
-
-		var actual Duration
-		err = json.Unmarshal(bytes, &actual)
-		assert.Nil(t, err)
-		// ナノ秒のうち、秒単位の桁は、秒に加算する
-		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
-		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
-		assert.Equal(t, expect, actual)
 	})
 }
 

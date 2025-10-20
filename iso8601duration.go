@@ -2,8 +2,6 @@ package iso8601duration
 
 import (
 	"bytes"
-	"encoding"
-	"encoding/json"
 	"errors"
 	"math"
 	"regexp"
@@ -39,14 +37,6 @@ var (
 	minutesPerHour        = decimal.NewFromInt(60)
 	secondsPerMinute      = decimal.NewFromInt(60)
 	nanosecondsPerSeconds = decimal.NewFromUint64(uint64(time.Second))
-)
-
-// 型チェック
-var (
-	_ encoding.TextMarshaler   = Duration{}
-	_ encoding.TextUnmarshaler = (*Duration)(nil)
-	_ json.Marshaler           = Duration{}
-	_ json.Unmarshaler         = (*Duration)(nil)
 )
 
 type Duration struct {
@@ -295,50 +285,6 @@ func (d *Duration) String() string {
 	}
 
 	return builder.String()
-}
-
-func (d *Duration) UnmarshalText(data []byte) error {
-	t, err := ParseString(string(data))
-	if err != nil {
-		return err
-	}
-	if t == nil {
-		return ErrBadFormat
-	}
-	*d = *t
-	return nil
-}
-
-func (d Duration) MarshalText() ([]byte, error) {
-	return []byte(d.String()), nil
-}
-
-func (d *Duration) UnmarshalJSON(data []byte) error {
-	dec := json.NewDecoder(bytes.NewBuffer(data))
-	var s string
-	if err := dec.Decode(&s); err != nil {
-		return err
-	}
-	t, err := ParseString(s)
-	if err != nil {
-		return err
-	}
-	if t == nil {
-		return ErrBadFormat
-	}
-	*d = *t
-	return nil
-}
-
-func (d Duration) MarshalJSON() ([]byte, error) {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	s := d.String()
-	err := enc.Encode(s)
-	if err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
 }
 
 func addFrac(base, frac decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
