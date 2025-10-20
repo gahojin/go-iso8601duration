@@ -262,8 +262,9 @@ func TestAddToJapan(t *testing.T) {
 		{from: "2020-02-28T01:00:00", duration: "P1Y", want: "2021-03-01T00:00:00"},
 		{from: "2020-08-15", duration: "P1Y3M", want: "2021-11-15T00:00:00"},
 		{from: "2020-08-31", duration: "P1Y1M", want: "2021-10-01T00:00:00"},
-		{from: "2024-06-01T18:00:00", duration: "PT30H", want: "2024-06-03T00:00:00"},
+		{from: "2024-06-05T18:00:00", duration: "PT30H", want: "2024-06-07T00:00:00"},
 		{from: "2024-06-01", duration: "P2Y", want: "2026-06-01T00:00:00"},
+		{from: "2025-10-20T09:00:00", duration: "P1D", want: "2025-10-22T00:00:00"},
 	}
 	tz := time.FixedZone("Asia/Tokyo", 9*60*60)
 	var fromTime time.Time

@@ -169,18 +169,17 @@ func (d Duration) AddToJapan(from time.Time) (*time.Time, error) {
 	}
 
 	// 民法139条 時間により期間を定めた時は、その期間は、即時から起算する
-	target := from
 	if !d.HasTimePart() {
 		isStartOfDay := from.Hour() == 0 && from.Minute() == 0 && from.Second() == 0 && from.Nanosecond() == 0
 		// 民法第140条により、起算日を算出 (初日不算入の原則により、翌日から起算する)
 		// 00:00:00の場合、初日算入する(民法第140条ただし書)
 		if !isStartOfDay {
-			target = time.Date(from.Year(), from.Month(), from.Day()+1, 0, 0, 0, 0, from.Location())
+			from = time.Date(from.Year(), from.Month(), from.Day()+1, 0, 0, 0, 0, from.Location())
 		}
 	}
 
 	// 年月を加算し、応当日があるか判断する
-	target = target.AddDate(int(d.Years), int(d.Months), 0)
+	target := from.AddDate(int(d.Years), int(d.Months), 0)
 	if target.Day() != from.Day() {
 		// 応当日がない場合、翌日にする
 		// 2025/01/30に1ヶ月加算の場合、AddDateでは2025/03/02(その月の月末 + 差分の日数)が返ってくる
