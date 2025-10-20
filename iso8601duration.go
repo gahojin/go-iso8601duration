@@ -169,7 +169,7 @@ func (d Duration) AddTo(from time.Time) time.Time {
 //   - 週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。
 //   - 週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。
 //     ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。
-func (d Duration) AddToJapan(from time.Time) (*time.Time, error) {
+func (d Duration) AddToJapan(from time.Time) time.Time {
 	years := int(d.Years)
 	months := int(d.Months)
 	weeks := int(d.Weeks)
@@ -215,7 +215,7 @@ func (d Duration) AddToJapan(from time.Time) (*time.Time, error) {
 	} else {
 		target = target.Add(timeDuration)
 	}
-	return &target, nil
+	return target
 }
 
 func normalize(base, target *uint32, mod uint32) bool {

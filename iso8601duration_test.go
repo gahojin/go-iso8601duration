@@ -237,11 +237,11 @@ func TestAddToJapan(t *testing.T) {
 			assert.Nil(t, err)
 			sut, err := ParseString(tt.duration)
 			assert.Nil(t, err)
-			actual, err := sut.AddToJapan(fromTime)
+			actual := sut.AddToJapan(fromTime)
 			assert.Nil(t, err)
 			expect, err := time.ParseInLocation("2006-01-02T15:04:05", tt.want, tz)
 			assert.Nil(t, err)
-			assert.Equal(t, expect, *actual)
+			assert.Equal(t, expect, actual)
 		})
 	}
 }
