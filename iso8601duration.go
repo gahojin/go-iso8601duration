@@ -124,6 +124,26 @@ func (d Duration) Abs() Duration {
 	return d
 }
 
+func (d Duration) OnlyYMWD() Duration {
+	return Duration{
+		Negative: d.Negative,
+		Years:    d.Years,
+		Months:   d.Months,
+		Weeks:    d.Weeks,
+		Days:     d.Days,
+	}
+}
+
+func (d Duration) OnlyTime() Duration {
+	return Duration{
+		Negative:    d.Negative,
+		Hours:       d.Hours,
+		Minutes:     d.Minutes,
+		Seconds:     d.Seconds,
+		Nanoseconds: d.Nanoseconds,
+	}
+}
+
 // AddTo は指定日時から期間分経過した日時を返す
 func (d Duration) AddTo(from time.Time) time.Time {
 	timeDuration := time.Duration(d.Hours)*time.Hour + time.Duration(d.Minutes)*time.Minute + time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanoseconds)
