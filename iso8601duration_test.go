@@ -135,6 +135,13 @@ func TestAddTo(t *testing.T) {
 	base := time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC)
 	actual := sut.AddTo(base)
 	assert.Equal(t, time.Date(2026, 12, 10+21+4, 5, 6, 7, 800*1000*1000, time.UTC), actual)
+
+	// マイナス期間
+	sut, err = ParseString("-P1Y2M3W4DT5H6M7.8S")
+	assert.Nil(t, err)
+
+	actual = sut.AddTo(base)
+	assert.Equal(t, time.Date(2024, 8, 10-21-4, -5, -6, -7, -800*1000*1000, time.UTC), actual)
 }
 
 func TestAddToJapan(t *testing.T) {
@@ -208,6 +215,14 @@ func TestAddToJapan(t *testing.T) {
 		{from: "2024-06-05T18:00:00", duration: "PT30H", want: "2024-06-07T00:00:00"},
 		{from: "2024-06-01", duration: "P2Y", want: "2026-06-01T00:00:00"},
 		{from: "2025-10-20T09:00:00", duration: "P1D", want: "2025-10-22T00:00:00"},
+		// マイナス期間
+		{from: "2020-06-01", duration: "-P1D", want: "2020-05-31T00:00:00"},
+		{from: "2025-10-22T03:00:00", duration: "-P1D", want: "2025-10-21T00:00:00"},
+		{from: "2025-10-22T03:00:00", duration: "-P0D", want: "2025-10-22T00:00:00"},
+		{from: "2025-10-22T03:00:00", duration: "-PT24H", want: "2025-10-21T03:00:00"},
+		{from: "2025-03-29", duration: "-P1M", want: "2025-03-01T00:00:00"},
+		{from: "2025-03-30", duration: "-P1M", want: "2025-03-01T00:00:00"},
+		{from: "2025-03-31", duration: "-P1MT1H", want: "2025-02-28T23:00:00"},
 	}
 	tz := time.FixedZone("Asia/Tokyo", 9*60*60)
 	var fromTime time.Time
@@ -222,11 +237,11 @@ func TestAddToJapan(t *testing.T) {
 			assert.Nil(t, err)
 			sut, err := ParseString(tt.duration)
 			assert.Nil(t, err)
-			actual, err := sut.AddToJapan(fromTime)
+			actual := sut.AddToJapan(fromTime)
 			assert.Nil(t, err)
 			expect, err := time.ParseInLocation("2006-01-02T15:04:05", tt.want, tz)
 			assert.Nil(t, err)
-			assert.Equal(t, expect, *actual)
+			assert.Equal(t, expect, actual)
 		})
 	}
 }

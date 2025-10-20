@@ -28,9 +28,6 @@ var (
 	// ErrBadFormat フォーマット不正エラー
 	ErrBadFormat = errors.New("bad format string")
 
-	// ErrUnsupportedNegative マイナス期間未サポート
-	ErrUnsupportedNegative = errors.New("unsupported negative duration")
-
 	one                   = decimal.NewFromInt(1)
 	monthsPerYear         = decimal.NewFromInt(12)
 	hoursPerDay           = decimal.NewFromInt(24)
@@ -172,10 +169,16 @@ func (d Duration) AddTo(from time.Time) time.Time {
 //   - 週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。
 //   - 週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。
 //     ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。
-func (d Duration) AddToJapan(from time.Time) (*time.Time, error) {
-	// マイナス期間はサポートしない
+func (d Duration) AddToJapan(from time.Time) time.Time {
+	years := int(d.Years)
+	months := int(d.Months)
+	weeks := int(d.Weeks)
+	days := int(d.Days)
 	if d.Negative {
-		return nil, ErrUnsupportedNegative
+		years = -years
+		months = -months
+		weeks = -weeks
+		days = -days
 	}
 
 	// 民法139条 時間により期間を定めた時は、その期間は、即時から起算する
@@ -184,12 +187,16 @@ func (d Duration) AddToJapan(from time.Time) (*time.Time, error) {
 		// 民法第140条により、起算日を算出 (初日不算入の原則により、翌日から起算する)
 		// 00:00:00の場合、初日算入する(民法第140条ただし書)
 		if !isStartOfDay {
-			from = time.Date(from.Year(), from.Month(), from.Day()+1, 0, 0, 0, 0, from.Location())
+			fromDay := from.Day()
+			if !d.Negative {
+				fromDay++
+			}
+			from = time.Date(from.Year(), from.Month(), fromDay, 0, 0, 0, 0, from.Location())
 		}
 	}
 
 	// 年月を加算し、応当日があるか判断する
-	target := from.AddDate(int(d.Years), int(d.Months), 0)
+	target := from.AddDate(years, months, 0)
 	if target.Day() != from.Day() {
 		// 応当日がない場合、翌日にする
 		// 2025/01/30に1ヶ月加算の場合、AddDateでは2025/03/02(その月の月末 + 差分の日数)が返ってくる
@@ -198,13 +205,17 @@ func (d Duration) AddToJapan(from time.Time) (*time.Time, error) {
 	}
 
 	// 週と日を加算する
-	if d.Days > 0 || d.Weeks > 0 {
-		target = target.AddDate(0, 0, int(d.Days+d.Weeks*7))
+	if days != 0 || weeks != 0 {
+		target = target.AddDate(0, 0, days+weeks*7)
 	}
 
 	timeDuration := time.Duration(d.Hours)*time.Hour + time.Duration(d.Minutes)*time.Minute + time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanoseconds)
-	target = target.Add(timeDuration)
-	return &target, nil
+	if d.Negative {
+		target = target.Add(-1 * timeDuration)
+	} else {
+		target = target.Add(timeDuration)
+	}
+	return target
 }
 
 func normalize(base, target *uint32, mod uint32) bool {
