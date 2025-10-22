@@ -70,7 +70,7 @@ func (d Duration) HasDatePart() bool {
 
 // HasTimePart は時刻部を持っているかを返す
 func (d Duration) HasTimePart() bool {
-	return d.Hours > 0 || d.Minutes > 0 || d.Seconds > 0.0 || d.Nanoseconds > 0
+	return d.Hours > 0 || d.Minutes > 0 || d.Seconds > 0 || d.Nanoseconds > 0
 }
 
 // Add は期間を合算する
@@ -141,6 +141,13 @@ func (d Duration) OnlyTime() Duration {
 	}
 }
 
+func (d Duration) GetYMWD() (int, int, int, int) {
+	if d.Negative {
+		return -1 * int(d.Years), -1 * int(d.Months), -1 * int(d.Weeks), -1 * int(d.Days)
+	}
+	return int(d.Years), int(d.Months), int(d.Weeks), int(d.Days)
+}
+
 // AddTo は指定日時から期間分経過した日時を返す
 func (d Duration) AddTo(from time.Time) time.Time {
 	timeDuration := time.Duration(d.Hours)*time.Hour + time.Duration(d.Minutes)*time.Minute + time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanoseconds)
@@ -169,29 +176,31 @@ func (d Duration) AddTo(from time.Time) time.Time {
 //   - 週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。
 //   - 週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。
 //     ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。
-func (d Duration) AddToJapan(from time.Time) time.Time {
-	years := int(d.Years)
-	months := int(d.Months)
-	weeks := int(d.Weeks)
-	days := int(d.Days)
-	if d.Negative {
-		years = -years
-		months = -months
-		weeks = -weeks
-		days = -days
+func (d Duration) AddToJapan(from time.Time, opts ...Option) time.Time {
+	// パラメータ処理
+	cfg := config{}
+	for _, opt := range opts {
+		opt(&cfg)
 	}
+
+	years, months, weeks, days := d.GetYMWD()
 
 	// 民法139条 時間により期間を定めた時は、その期間は、即時から起算する
 	if !d.HasTimePart() {
-		isStartOfDay := from.Hour() == 0 && from.Minute() == 0 && from.Second() == 0 && from.Nanosecond() == 0
-		// 民法第140条により、起算日を算出 (初日不算入の原則により、翌日から起算する)
-		// 00:00:00の場合、初日算入する(民法第140条ただし書)
-		if !isStartOfDay {
-			fromDay := from.Day()
-			if !d.Negative {
-				fromDay++
-			}
-			from = time.Date(from.Year(), from.Month(), fromDay, 0, 0, 0, 0, from.Location())
+		exclude := false
+		if cfg.excludeStartDate != nil {
+			exclude = *cfg.excludeStartDate
+		} else if !d.Negative {
+			// マイナス期間の場合、初日算入しない
+			// 民法第140条により、起算日を算出 (初日不算入の原則により、翌日から起算する)
+			// 00:00:00の場合、初日算入する(民法第140条ただし書)
+			exclude = from.Hour() != 0 || from.Minute() != 0 || from.Second() != 0 || from.Nanosecond() != 0
+		}
+		if exclude {
+			from = time.Date(from.Year(), from.Month(), from.Day()+1, 0, 0, 0, 0, from.Location())
+		} else if !cfg.preserveTimeOnZero {
+			// 減算する場合、0秒と0日が判別出来ないため、フラグによって、0:00にするかを決定する
+			from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 		}
 	}
 
@@ -227,6 +236,14 @@ func normalize(base, target *uint32, mod uint32) bool {
 	*base = *base + t
 	*target = *target % mod
 	return true
+}
+
+func (d Duration) fixInitialDay(from time.Time, includeInitialDay bool) time.Time {
+	fromDay := from.Day()
+	if includeInitialDay && !d.Negative {
+		fromDay++
+	}
+	return time.Date(from.Year(), from.Month(), fromDay, 0, 0, 0, 0, from.Location())
 }
 
 // Normalize は正規化を行う (ex. 24時間を1日/60分を1時間にするなど)
@@ -266,6 +283,9 @@ func (d Duration) Normalize() (Duration, bool) {
 
 func (d *Duration) String() string {
 	if d.IsZero() {
+		if d.Negative {
+			return "-PT0S"
+		}
 		return "PT0S"
 	}
 
