@@ -260,6 +260,8 @@ func TestAddToJapanWithPreserveTime(t *testing.T) {
 		{from: "2025-10-20T17:00:00", duration: "PT0S", want: "2025-10-21T00:00:00"},
 		{from: "2025-10-20T17:00:00", duration: "-P0D", want: "2025-10-20T17:00:00"},
 		{from: "2025-10-20T17:00:00", duration: "-PT0S", want: "2025-10-20T17:00:00"},
+		{from: "2025-10-20T17:00:00", duration: "-P1D", want: "2025-10-19T00:00:00"},
+		{from: "2025-10-20T17:00:00", duration: "P1D", want: "2025-10-22T00:00:00"},
 	}
 	tz := time.FixedZone("Asia/Tokyo", 9*60*60)
 	var fromTime time.Time

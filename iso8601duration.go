@@ -198,7 +198,7 @@ func (d Duration) AddToJapan(from time.Time, opts ...Option) time.Time {
 		}
 		if exclude {
 			from = time.Date(from.Year(), from.Month(), from.Day()+1, 0, 0, 0, 0, from.Location())
-		} else if !cfg.preserveTimeOnZero {
+		} else if !d.IsZero() || !cfg.preserveTimeOnZero {
 			// 減算する場合、0秒と0日が判別出来ないため、フラグによって、0:00にするかを決定する
 			from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 		}
