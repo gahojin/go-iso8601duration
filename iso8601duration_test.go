@@ -1,8 +1,14 @@
 package iso8601duration
 
 import (
+	"encoding/csv"
 	"fmt"
+	"io"
 	"math"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"pgregory.net/rapid"
 )
+
+var japanTz = time.FixedZone("Asia/Tokyo", 9*60*60)
 
 func TestParseString(t *testing.T) {
 	// フォーマットエラー
@@ -144,141 +152,93 @@ func TestAddTo(t *testing.T) {
 	assert.Equal(t, time.Date(2024, 8, 10-21-4, -5, -6, -7, -800*1000*1000, time.UTC), actual)
 }
 
-func TestAddToJapan(t *testing.T) {
-	tests := []struct {
-		from     string
-		duration string
-		want     string
-	}{
-		// 0日
-		{from: "2020-06-01", duration: "P0D", want: "2020-06-01T00:00:00"},
-		{from: "2020-06-01T01:00:00", duration: "P0D", want: "2020-06-02T00:00:00"},
-		// 当日
-		{from: "2020-06-01", duration: "P1D", want: "2020-06-02T00:00:00"},
-		{from: "2020-06-01T01:00:00", duration: "P1D", want: "2020-06-03T00:00:00"},
-		// 2日間
-		{from: "2020-06-01", duration: "P2D", want: "2020-06-03T00:00:00"},
-		// 月末/2日間
-		{from: "2020-06-30", duration: "P2D", want: "2020-07-02T00:00:00"},
-		// 1ヶ月
-		{from: "2020-06-01", duration: "P1M", want: "2020-07-01T00:00:00"},
-		{from: "2020-08-31", duration: "P1M", want: "2020-10-01T00:00:00"},
-		{from: "2020-10-10", duration: "P1M", want: "2020-11-10T00:00:00"},
-		{from: "2020-12-01", duration: "P1M", want: "2021-01-01T00:00:00"},
-		{from: "2021-01-31", duration: "P1M", want: "2021-03-01T00:00:00"},
-		{from: "2022-02-28", duration: "P1M", want: "2022-03-28T00:00:00"},
-		{from: "2024-01-29", duration: "P1M", want: "2024-02-29T00:00:00"},
-		{from: "2024-01-30", duration: "P1M", want: "2024-03-01T00:00:00"},
-		{from: "2024-01-31", duration: "P1M", want: "2024-03-01T00:00:00"},
-		{from: "2024-02-01", duration: "P1M", want: "2024-03-01T00:00:00"},
-		{from: "2024-03-01", duration: "P1M", want: "2024-04-01T00:00:00"},
-		// 1ヶ月 1日
-		{from: "2020-06-01", duration: "P1M1D", want: "2020-07-02T00:00:00"},
-		{from: "2020-08-31", duration: "P1M1D", want: "2020-10-02T00:00:00"},
-		{from: "2020-10-10", duration: "P1M1D", want: "2020-11-11T00:00:00"},
-		{from: "2020-12-01", duration: "P1M1D", want: "2021-01-02T00:00:00"},
-		{from: "2021-01-31", duration: "P1M1D", want: "2021-03-02T00:00:00"},
-		{from: "2021-02-28", duration: "P1M1D", want: "2021-03-29T00:00:00"},
-		{from: "2024-01-29", duration: "P1M1D", want: "2024-03-01T00:00:00"},
-		{from: "2024-01-30", duration: "P1M1D", want: "2024-03-02T00:00:00"},
-		{from: "2024-01-31", duration: "P1M1D", want: "2024-03-02T00:00:00"},
-		{from: "2024-02-01", duration: "P1M1D", want: "2024-03-02T00:00:00"},
-		{from: "2024-03-01", duration: "P1M1D", want: "2024-04-02T00:00:00"},
-		// 3ヶ月
-		{from: "2020-06-01", duration: "P3M", want: "2020-09-01T00:00:00"},
-		{from: "2020-08-31", duration: "P3M", want: "2020-12-01T00:00:00"},
-		{from: "2020-10-10", duration: "P3M", want: "2021-01-10T00:00:00"},
-		{from: "2020-12-01", duration: "P3M", want: "2021-03-01T00:00:00"},
-		{from: "2021-01-31", duration: "P3M", want: "2021-05-01T00:00:00"},
-		{from: "2021-02-28", duration: "P3M", want: "2021-05-28T00:00:00"},
-		// 6ヶ月
-		{from: "2020-06-01", duration: "P6M", want: "2020-12-01T00:00:00"},
-		{from: "2020-08-31", duration: "P6M", want: "2021-03-01T00:00:00"},
-		{from: "2020-10-10", duration: "P6M", want: "2021-04-10T00:00:00"},
-		{from: "2020-12-01", duration: "P6M", want: "2021-06-01T00:00:00"},
-		{from: "2021-01-31", duration: "P6M", want: "2021-07-31T00:00:00"},
-		{from: "2021-02-28", duration: "P6M", want: "2021-08-28T00:00:00"},
-		// 1週間
-		{from: "2021-02-28", duration: "P1W", want: "2021-03-07T00:00:00"},
-		// その他
-		{from: "2023-01-01", duration: "P2M", want: "2023-03-01T00:00:00"}, // 143条2項 (平年)
-		{from: "2024-01-01", duration: "P2M", want: "2024-03-01T00:00:00"}, // 143条2項 (閏年)
-		{from: "2024-01-20", duration: "P2M", want: "2024-03-20T00:00:00"}, // 143条2項
-		{from: "2024-01-31", duration: "P2M", want: "2024-03-31T00:00:00"}, // 143条2項
-		{from: "2023-01-31", duration: "P1M", want: "2023-03-01T00:00:00"}, // 143条2項ただし書 (平年)
-		{from: "2024-01-31", duration: "P1M", want: "2024-03-01T00:00:00"}, // 143条2項ただし書 (閏年)
-		{from: "2024-03-31", duration: "P1M", want: "2024-05-01T00:00:00"}, // 143条2項ただし書
-		{from: "2024-03-31", duration: "P1M", want: "2024-05-01T00:00:00"}, // 143条2項ただし書
-		{from: "2024-05-30T01:00:00", duration: "P1M", want: "2024-07-01T00:00:00"},
-		{from: "2024-05-30T01:00:00", duration: "P1MT1H", want: "2024-06-30T02:00:00"},
-		{from: "2023-01-29", duration: "P1M", want: "2023-03-01T00:00:00"},
-		{from: "2020-02-28", duration: "P1Y", want: "2021-02-28T00:00:00"},
-		{from: "2020-02-28T01:00:00", duration: "P1Y", want: "2021-03-01T00:00:00"},
-		{from: "2020-08-15", duration: "P1Y3M", want: "2021-11-15T00:00:00"},
-		{from: "2020-08-31", duration: "P1Y1M", want: "2021-10-01T00:00:00"},
-		{from: "2024-06-05T18:00:00", duration: "PT30H", want: "2024-06-07T00:00:00"},
-		{from: "2024-06-01", duration: "P2Y", want: "2026-06-01T00:00:00"},
-		{from: "2025-10-20T09:00:00", duration: "P1D", want: "2025-10-22T00:00:00"},
-		// マイナス期間
-		{from: "2020-06-01", duration: "-P1D", want: "2020-05-31T00:00:00"},
-		{from: "2025-10-20T17:00:00", duration: "-P1D", want: "2025-10-19T00:00:00"},
-		{from: "2025-10-20T17:00:00", duration: "-PT24H", want: "2025-10-19T17:00:00"},
-		{from: "2025-10-20T17:00:00", duration: "-PT0S", want: "2025-10-20T00:00:00"},
-		{from: "2025-03-29", duration: "-P1M", want: "2025-03-01T00:00:00"},
-		{from: "2025-03-30", duration: "-P1M", want: "2025-03-01T00:00:00"},
-		{from: "2025-03-31", duration: "-P1MT1H", want: "2025-02-28T23:00:00"},
-	}
-	tz := time.FixedZone("Asia/Tokyo", 9*60*60)
-	var fromTime time.Time
-	var err error
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%s %s", tt.from, tt.duration), func(t *testing.T) {
-			if strings.Contains(tt.from, "T") {
-				fromTime, err = time.ParseInLocation("2006-01-02T15:04:05", tt.from, tz)
-			} else {
-				fromTime, err = time.ParseInLocation("2006-01-02", tt.from, tz)
-			}
-			assert.Nil(t, err)
-			sut, err := ParseString(tt.duration)
-			assert.Nil(t, err)
-			actual := sut.AddToJapan(fromTime)
-			assert.Nil(t, err)
-			expect, err := time.ParseInLocation("2006-01-02T15:04:05", tt.want, tz)
-			assert.Nil(t, err)
-			assert.Equal(t, expect, actual)
-		})
-	}
+type AddToJapanTestData struct {
+	from     string
+	duration string
+	preserve bool
+	exclude  *bool
+	want     string
 }
 
-func TestAddToJapanWithPreserveTime(t *testing.T) {
-	tests := []struct {
-		from     string
-		duration string
-		want     string
-	}{
-		{from: "2025-10-20T17:00:00", duration: "P0D", want: "2025-10-21T00:00:00"},
-		{from: "2025-10-20T17:00:00", duration: "PT0S", want: "2025-10-21T00:00:00"},
-		{from: "2025-10-20T17:00:00", duration: "-P0D", want: "2025-10-20T17:00:00"},
-		{from: "2025-10-20T17:00:00", duration: "-PT0S", want: "2025-10-20T17:00:00"},
-		{from: "2025-10-20T17:00:00", duration: "-P1D", want: "2025-10-19T00:00:00"},
-		{from: "2025-10-20T17:00:00", duration: "P1D", want: "2025-10-22T00:00:00"},
+func parseCsv(record []string) (*AddToJapanTestData, error) {
+	preserve := record[2]
+	exclude := record[3]
+
+	preserveTimeOnZero := false
+	if preserve != "" {
+		val, err := strconv.ParseBool(preserve)
+		if err != nil {
+			return nil, err
+		}
+		preserveTimeOnZero = val
 	}
-	tz := time.FixedZone("Asia/Tokyo", 9*60*60)
-	var fromTime time.Time
-	var err error
-	for _, tt := range tests {
+
+	var excludeStartDate *bool = nil
+	if exclude != "" {
+		val, err := strconv.ParseBool(exclude)
+		if err != nil {
+			return nil, err
+		}
+		excludeStartDate = &val
+	}
+
+	return &AddToJapanTestData{
+		from:     record[0],
+		duration: record[1],
+		preserve: preserveTimeOnZero,
+		exclude:  excludeStartDate,
+		want:     record[4],
+	}, nil
+}
+
+func TestAddToJapan(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	assert.True(t, ok)
+	testCsvFilePath := filepath.Join(filepath.Dir(filename), "testdata", "add_to_japan.csv")
+
+	f, err := os.Open(testCsvFilePath)
+	assert.Nil(t, err)
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.Comment = '/'
+	r.FieldsPerRecord = -1
+
+	// ヘッダー部をスキップ
+	_, err = r.Read()
+	assert.Nil(t, err)
+
+	for {
+		record, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		assert.Nil(t, err)
+
+		tt, err := parseCsv(record)
+		assert.Nil(t, err)
+
+		var fromTime time.Time
 		t.Run(fmt.Sprintf("%s %s", tt.from, tt.duration), func(t *testing.T) {
 			if strings.Contains(tt.from, "T") {
-				fromTime, err = time.ParseInLocation("2006-01-02T15:04:05", tt.from, tz)
+				fromTime, err = time.ParseInLocation("2006-01-02T15:04:05", tt.from, japanTz)
 			} else {
-				fromTime, err = time.ParseInLocation("2006-01-02", tt.from, tz)
+				fromTime, err = time.ParseInLocation("2006-01-02", tt.from, japanTz)
 			}
 			assert.Nil(t, err)
 			sut, err := ParseString(tt.duration)
 			assert.Nil(t, err)
-			actual := sut.AddToJapan(fromTime, WithPreserveTimeOnZero())
+
+			var actual time.Time
+			if tt.preserve {
+				actual = sut.AddToJapan(fromTime, WithPreserveTimeOnZero())
+			} else if tt.exclude == nil {
+				actual = sut.AddToJapan(fromTime)
+			} else {
+				actual = sut.AddToJapan(fromTime, WithExcludeStartDate(*tt.exclude))
+			}
 			assert.Nil(t, err)
-			expect, err := time.ParseInLocation("2006-01-02T15:04:05", tt.want, tz)
+			expect, err := time.ParseInLocation("2006-01-02T15:04:05", tt.want, japanTz)
 			assert.Nil(t, err)
 			assert.Equal(t, expect, actual)
 		})
