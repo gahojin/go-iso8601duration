@@ -187,20 +187,20 @@ func (d Duration) AddToJapan(from time.Time, opts ...Option) time.Time {
 
 	// 民法139条 時間により期間を定めた時は、その期間は、即時から起算する
 	if !d.HasTimePart() {
-		exclude := false
-		if cfg.excludeStartDate != nil {
-			exclude = *cfg.excludeStartDate
-		} else if !d.Negative {
-			// マイナス期間の場合、初日算入しない
-			// 民法第140条により、起算日を算出 (初日不算入の原則により、翌日から起算する)
-			// 00:00:00の場合、初日算入する(民法第140条ただし書)
-			exclude = from.Hour() != 0 || from.Minute() != 0 || from.Second() != 0 || from.Nanosecond() != 0
-		}
-		if exclude {
-			from = time.Date(from.Year(), from.Month(), from.Day()+1, 0, 0, 0, 0, from.Location())
-		} else if !d.IsZero() || !cfg.preserveTimeOnZero {
-			// 減算する場合、0秒と0日が判別出来ないため、フラグによって、0:00にするかを決定する
-			from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
+		if !d.IsZero() || !cfg.preserveTimeOnZero {
+			exclude := false
+			if cfg.excludeStartDate == nil {
+				// 民法第140条により、起算日を算出 (初日不算入の原則により、翌日から起算する)
+				// 00:00:00の場合、初日算入する(民法第140条ただし書)
+				exclude = from.Hour() != 0 || from.Minute() != 0 || from.Second() != 0 || from.Nanosecond() != 0
+			} else {
+				exclude = *cfg.excludeStartDate
+			}
+			if exclude == d.Negative {
+				from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
+			} else {
+				from = time.Date(from.Year(), from.Month(), from.Day()+1, 0, 0, 0, 0, from.Location())
+			}
 		}
 	}
 
