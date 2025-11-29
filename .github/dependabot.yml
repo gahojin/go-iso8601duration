@@ -7,8 +7,9 @@ updates:
         patterns:
           - "*"
     schedule:
-      interval: "monthly"
-
+      interval: "daily"
+    cooldown:
+      default-days: 7
   - package-ecosystem: "npm"
     directory: "/"
     groups:
@@ -16,9 +17,9 @@ updates:
         patterns:
           - "*"
     schedule:
-      interval: "weekly"
-      day: "sunday"
-
+      interval: "daily"
+    cooldown:
+      default-days: 7
   - package-ecosystem: "gomod"
     directory: "/"
     groups:
@@ -26,5 +27,6 @@ updates:
         patterns:
           - "*"
     schedule:
-      interval: "weekly"
-      day: "sunday"
+      interval: "daily"
+    cooldown:
+      default-days: 7
