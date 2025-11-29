@@ -23,34 +23,33 @@ func TestParseString(t *testing.T) {
 	// フォーマットエラー
 	actual, err := ParseString("12Y10M")
 	assert.Error(t, err, "Expected error for invalid ISO8601 duration")
-	assert.Nil(t, actual)
 
 	// 日付部のみ
 	actual, err = ParseString("P12Y10M")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "P12Y10M", actual.String())
 	assert.False(t, actual.HasTimePart())
 
 	// 時刻部のみ
 	actual, err = ParseString("PT12H34M56S")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "PT12H34M56S", actual.String())
 	assert.True(t, actual.HasTimePart())
 
 	// 週を含む
 	actual, err = ParseString("P12Y10M3W")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "P12Y10M3W", actual.String())
 	assert.False(t, actual.HasTimePart())
 
 	// 年に小数部を含む
 	actual, err = ParseString("P0.5Y")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "P6M", actual.String())
 
 	// 日に小数部を含む
 	actual, err = ParseString("P0.5D")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "PT12H", actual.String())
 
 	// 時刻に小数部を含む
@@ -98,7 +97,7 @@ func TestParseString(t *testing.T) {
 		// ナノ秒のうち、秒単位の桁は、秒に加算する
 		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
 		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
-		assert.Equal(t, expect, *actual)
+		assert.Equal(t, expect, actual)
 	})
 }
 
@@ -135,7 +134,7 @@ func TestAdd(t *testing.T) {
 	sut, err := ParseString("P1Y2M3W4DT5H6M7.8S")
 	assert.NoError(t, err)
 
-	actual, ok := sut.Add(*sut)
+	actual, ok := sut.Add(sut)
 	assert.True(t, ok)
 	assert.Equal(t, Duration{
 		Years:       2,
@@ -246,7 +245,7 @@ func TestAddToJapan(t *testing.T) {
 				actual = sut.AddToJapan(fromTime, WithExcludeStartDate(*tt.exclude))
 			}
 			expect, err := time.ParseInLocation("2006-01-02T15:04:05", tt.want, japanTz)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, expect, actual)
 		})
 	}

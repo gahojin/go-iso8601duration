@@ -48,6 +48,8 @@ type Duration struct {
 	Nanoseconds uint32
 }
 
+var ZeroDuration = Duration{}
+
 // Equal は値が一致するかを返す
 func (d Duration) Equal(other Duration) bool {
 	return d.Negative == d.Negative && d.Years == other.Years && d.Months == other.Months && d.Weeks == other.Weeks && d.Days == other.Days && d.Hours == other.Hours && d.Minutes == other.Minutes && d.Seconds == other.Seconds && d.Nanoseconds == other.Nanoseconds
@@ -281,7 +283,7 @@ func (d Duration) Normalize() (Duration, bool) {
 	return r, true
 }
 
-func (d *Duration) String() string {
+func (d Duration) String() string {
 	if d.IsZero() {
 		if d.Negative {
 			return "-PT0S"
@@ -343,10 +345,10 @@ func addFrac(base, frac decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
 }
 
 // ParseString は文字列をISO-8601 Duration書式としてパースし、 Duration を返す
-func ParseString(s string) (*Duration, error) {
+func ParseString(s string) (Duration, error) {
 	groups := iso8601Pattern.FindStringSubmatch(s)
 	if groups == nil {
-		return nil, ErrBadFormat
+		return ZeroDuration, ErrBadFormat
 	}
 
 	var err error
@@ -386,7 +388,7 @@ func ParseString(s string) (*Duration, error) {
 			seconds, err = decimal.NewFromString(part)
 		}
 		if err != nil {
-			return nil, err
+			return ZeroDuration, err
 		}
 	}
 
@@ -394,7 +396,7 @@ func ParseString(s string) (*Duration, error) {
 	months, monthsFrac = addFrac(months, yearsFrac.Mul(monthsPerYear))
 	if monthsFrac.GreaterThan(decimal.Zero) {
 		// 日に換算出来ないため、月の部分に小数は使用出来ない
-		return nil, errors.Join(ErrBadFormat, errors.New("fractions aren't supported for the month-position"))
+		return ZeroDuration, errors.Join(ErrBadFormat, errors.New("fractions aren't supported for the month-position"))
 	}
 
 	days, daysFrac = addFrac(days, decimal.Zero)
@@ -403,7 +405,7 @@ func ParseString(s string) (*Duration, error) {
 	seconds, secondsFrac = addFrac(seconds, minutesFrac.Mul(secondsPerMinute))
 	nanoSeconds := secondsFrac.Mul(nanosecondsPerSeconds)
 
-	return &Duration{
+	return Duration{
 		Negative:    negative,
 		Years:       uint32(years.IntPart()),
 		Months:      uint32(months.IntPart()),

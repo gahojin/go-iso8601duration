@@ -56,8 +56,9 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	if len(data) >= 2 && data[0] == '"' && data[len(data)-1] == '"' {
-		data = data[1 : len(data)-1]
+	n := len(data)
+	if n >= 2 && data[0] == '"' && data[n-1] == '"' {
+		data = data[1 : n-1]
 	}
 	t, err := ParseString(string(data))
 	if err != nil {
