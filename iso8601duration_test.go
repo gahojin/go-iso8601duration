@@ -72,6 +72,13 @@ func TestParseString(t *testing.T) {
 	assert.Equal(t, "-P12Y10M", actual.String())
 	assert.False(t, actual.HasTimePart())
 
+	// 全ての要素が入っている
+	actual, err = ParseString("-P1Y2M4DT4H56M7.8S")
+	assert.NoError(t, err)
+	assert.Equal(t, "-P1Y2M4DT4H56M7.8S", actual.String())
+	assert.True(t, actual.HasDatePart())
+	assert.True(t, actual.HasTimePart())
+
 	// プロパティテスト
 	rapid.Check(t, func(t *rapid.T) {
 		expect := Duration{
@@ -93,6 +100,12 @@ func TestParseString(t *testing.T) {
 		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
 		assert.Equal(t, expect, *actual)
 	})
+}
+
+func BenchmarkParseString(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, _ = ParseString("-P1Y2M4DT4H56M7.8S")
+	}
 }
 
 func TestIsValid(t *testing.T) {
