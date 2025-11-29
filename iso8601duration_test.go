@@ -7,13 +7,13 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 )
 
@@ -57,20 +57,27 @@ func TestParseString(t *testing.T) {
 	// 0.34h -> 20.4m -> 20m + 24s
 	// 0.78m -> 46.8s
 	actual, err = ParseString("PT12.34H56.78M9.01S")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "PT12H77M19.81S", actual.String())
 	assert.True(t, actual.HasTimePart())
 	actual, err = ParseString("PT12,34H56,78M9,01S")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "PT12H77M19.81S", actual.String())
 	assert.True(t, actual.HasTimePart())
 
 	// マイナス
 	actual, err = ParseString("-P12Y10M")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.True(t, actual.Negative)
 	assert.Equal(t, "-P12Y10M", actual.String())
 	assert.False(t, actual.HasTimePart())
+
+	// 全ての要素が入っている
+	actual, err = ParseString("-P1Y2M4DT4H56M7.8S")
+	assert.NoError(t, err)
+	assert.Equal(t, "-P1Y2M4DT4H56M7.8S", actual.String())
+	assert.True(t, actual.HasDatePart())
+	assert.True(t, actual.HasTimePart())
 
 	// プロパティテスト
 	rapid.Check(t, func(t *rapid.T) {
@@ -87,12 +94,18 @@ func TestParseString(t *testing.T) {
 		}
 
 		actual, err = ParseString(expect.String())
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		// ナノ秒のうち、秒単位の桁は、秒に加算する
 		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
 		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
 		assert.Equal(t, expect, *actual)
 	})
+}
+
+func BenchmarkParseString(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, _ = ParseString("-P1Y2M4DT4H56M7.8S")
+	}
 }
 
 func TestIsValid(t *testing.T) {
@@ -120,7 +133,7 @@ func TestIsValid(t *testing.T) {
 
 func TestAdd(t *testing.T) {
 	sut, err := ParseString("P1Y2M3W4DT5H6M7.8S")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	actual, ok := sut.Add(*sut)
 	assert.True(t, ok)
@@ -138,7 +151,7 @@ func TestAdd(t *testing.T) {
 
 func TestAddTo(t *testing.T) {
 	sut, err := ParseString("P1Y2M3W4DT5H6M7.8S")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	base := time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC)
 	actual := sut.AddTo(base)
@@ -146,7 +159,7 @@ func TestAddTo(t *testing.T) {
 
 	// マイナス期間
 	sut, err = ParseString("-P1Y2M3W4DT5H6M7.8S")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	actual = sut.AddTo(base)
 	assert.Equal(t, time.Date(2024, 8, 10-21-4, -5, -6, -7, -800*1000*1000, time.UTC), actual)
@@ -160,25 +173,21 @@ type AddToJapanTestData struct {
 	want     string
 }
 
-func parseCsv(record []string) (*AddToJapanTestData, error) {
+func parseCsv(t *testing.T, record []string) *AddToJapanTestData {
 	preserve := record[2]
 	exclude := record[3]
 
 	preserveTimeOnZero := false
 	if preserve != "" {
 		val, err := strconv.ParseBool(preserve)
-		if err != nil {
-			return nil, err
-		}
+		require.NoError(t, err)
 		preserveTimeOnZero = val
 	}
 
 	var excludeStartDate *bool = nil
 	if exclude != "" {
 		val, err := strconv.ParseBool(exclude)
-		if err != nil {
-			return nil, err
-		}
+		require.NoError(t, err)
 		excludeStartDate = &val
 	}
 
@@ -188,16 +197,16 @@ func parseCsv(record []string) (*AddToJapanTestData, error) {
 		preserve: preserveTimeOnZero,
 		exclude:  excludeStartDate,
 		want:     record[4],
-	}, nil
+	}
 }
 
 func TestAddToJapan(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	assert.True(t, ok)
-	testCsvFilePath := filepath.Join(filepath.Dir(filename), "testdata", "add_to_japan.csv")
+	t.Helper()
+
+	testCsvFilePath := filepath.Join("testdata", "add_to_japan.csv")
 
 	f, err := os.Open(testCsvFilePath)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	defer f.Close()
 
 	r := csv.NewReader(f)
@@ -206,17 +215,16 @@ func TestAddToJapan(t *testing.T) {
 
 	// ヘッダー部をスキップ
 	_, err = r.Read()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	for {
 		record, err := r.Read()
 		if err == io.EOF {
 			break
 		}
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
-		tt, err := parseCsv(record)
-		assert.Nil(t, err)
+		tt := parseCsv(t, record)
 
 		var fromTime time.Time
 		t.Run(fmt.Sprintf("%s %s", tt.from, tt.duration), func(t *testing.T) {
@@ -225,9 +233,9 @@ func TestAddToJapan(t *testing.T) {
 			} else {
 				fromTime, err = time.ParseInLocation("2006-01-02", tt.from, japanTz)
 			}
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			sut, err := ParseString(tt.duration)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 
 			var actual time.Time
 			if tt.preserve {
@@ -237,7 +245,6 @@ func TestAddToJapan(t *testing.T) {
 			} else {
 				actual = sut.AddToJapan(fromTime, WithExcludeStartDate(*tt.exclude))
 			}
-			assert.Nil(t, err)
 			expect, err := time.ParseInLocation("2006-01-02T15:04:05", tt.want, japanTz)
 			assert.Nil(t, err)
 			assert.Equal(t, expect, actual)
