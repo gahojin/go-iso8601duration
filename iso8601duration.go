@@ -31,8 +31,6 @@ type Duration struct {
 	Nanoseconds uint32
 }
 
-var ZeroDuration = Duration{}
-
 // Equal は値が一致するかを返す
 func (d Duration) Equal(other Duration) bool {
 	return d.Negative == d.Negative && d.Years == other.Years && d.Months == other.Months && d.Weeks == other.Weeks && d.Days == other.Days && d.Hours == other.Hours && d.Minutes == other.Minutes && d.Seconds == other.Seconds && d.Nanoseconds == other.Nanoseconds
