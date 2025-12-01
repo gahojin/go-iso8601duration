@@ -16,19 +16,19 @@ var (
 	_ json.Unmarshaler           = (*Duration)(nil)
 )
 
+var nullBytes = []byte("null")
+
 func (d Duration) MarshalText() ([]byte, error) {
 	return []byte(d.String()), nil
 }
 
 func (d *Duration) UnmarshalText(data []byte) error {
 	t, err := ParseString(string(data))
-	if err == nil {
-		if t == nil {
-			return ErrBadFormat
-		}
-		*d = *t
+	if err != nil {
+		return err
 	}
-	return err
+	*d = t
+	return nil
 }
 
 func (d Duration) MarshalBinary() ([]byte, error) {
@@ -51,17 +51,19 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) error {
-	dec := json.NewDecoder(bytes.NewBuffer(data))
-	var s string
-	if err := dec.Decode(&s); err != nil {
+	if bytes.Equal(data, nullBytes) {
+		*d = Duration{}
+		return nil
+	}
+
+	n := len(data)
+	if n >= 2 && data[0] == '"' && data[n-1] == '"' {
+		data = data[1 : n-1]
+	}
+	t, err := ParseString(string(data))
+	if err != nil {
 		return err
 	}
-	t, err := ParseString(s)
-	if err == nil {
-		if t == nil {
-			return ErrBadFormat
-		}
-		*d = *t
-	}
-	return err
+	*d = t
+	return nil
 }
