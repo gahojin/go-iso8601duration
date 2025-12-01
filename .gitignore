@@ -25,3 +25,5 @@ lefthook-local.*
 
 # direnv
 .envrc
+examples/examples
+*.fail

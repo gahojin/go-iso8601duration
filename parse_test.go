@@ -90,6 +90,39 @@ func TestParseString(t *testing.T) {
 	})
 }
 
+func TestParseString_fractions(t *testing.T) {
+	actual, err := ParseString("P0.5Y")
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), actual.Years)
+	assert.Equal(t, uint32(6), actual.Months)
+
+	actual, err = ParseString("P0.25Y")
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), actual.Years)
+	assert.Equal(t, uint32(3), actual.Months)
+
+	actual, err = ParseString("P0.1Y")
+	assert.ErrorContains(t, err, "fractions aren't supported for the month-position")
+
+	actual, err = ParseString("P0.5D")
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), actual.Days)
+	assert.Equal(t, uint32(12), actual.Hours)
+
+	actual, err = ParseString("P0.0625D")
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), actual.Days)
+	assert.Equal(t, uint32(1), actual.Hours)
+	assert.Equal(t, uint32(30), actual.Minutes)
+
+	actual, err = ParseString("P0.065D")
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(0), actual.Days)
+	assert.Equal(t, uint32(1), actual.Hours)
+	assert.Equal(t, uint32(33), actual.Minutes)
+	assert.Equal(t, uint32(36), actual.Seconds)
+}
+
 func BenchmarkParseString(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = ParseString("-P1Y2M4DT4H56M7.8S")
