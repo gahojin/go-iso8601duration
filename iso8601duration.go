@@ -2,9 +2,7 @@ package iso8601duration
 
 import (
 	"bytes"
-	"errors"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -12,22 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// 小数点を持つ数値
-const fractionalNumbers = `\d+(?:[\.,]\d+)?`
-
-// 日付部
-const datePattern = "(?:(?P<year>" + fractionalNumbers + ")Y)?(?:(?P<month>" + fractionalNumbers + `)M)?(?:(?P<week>\d+)W)?(?:(?P<day>` + fractionalNumbers + ")D)?"
-
-// 時刻部
-const timePattern = "T(?:(?P<hour>" + fractionalNumbers + ")H)?(?:(?P<minute>" + fractionalNumbers + ")M)?(?:(?P<second>" + fractionalNumbers + ")S)?"
-
 var (
-	// iso8601Pattern ISO-8601 Duration 書式 PnYnMnWnDTnHnMnS
-	iso8601Pattern = regexp.MustCompile("^(?P<negative>-)?P(?:" + datePattern + "(?:" + timePattern + ")?)$")
-
-	// ErrBadFormat フォーマット不正エラー
-	ErrBadFormat = errors.New("bad format string")
-
 	one                   = decimal.NewFromInt(1)
 	monthsPerYear         = decimal.NewFromInt(12)
 	hoursPerDay           = decimal.NewFromInt(24)

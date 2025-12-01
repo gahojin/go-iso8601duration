@@ -11,7 +11,7 @@ import (
 func TestParseString(t *testing.T) {
 	// フォーマットエラー
 	actual, err := ParseString("12Y10M")
-	assert.Error(t, err, "Expected error for invalid ISO8601 duration")
+	assert.ErrorContains(t, err, "unexpected input")
 
 	// 日付部のみ
 	actual, err = ParseString("P12Y10M")
