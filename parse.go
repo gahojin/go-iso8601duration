@@ -9,11 +9,40 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const (
-	stateInitial int = iota
-	stateParsingDate
-	stateParsingTime
-)
+type parseState interface {
+	NextState(c rune, text string, startIndex, index int) (parseState, int, error)
+	Generate() (Duration, error)
+}
+
+type stateInitial struct {
+	negative bool
+}
+
+type stateParsingDate struct {
+	*stateInitial
+
+	setYear  bool
+	setMonth bool
+	setDay   bool
+	setWeek  bool
+
+	years  decimal.Decimal
+	months decimal.Decimal
+	days   decimal.Decimal
+	weeks  decimal.Decimal
+}
+
+type stateParsingTime struct {
+	*stateParsingDate
+
+	setHour   bool
+	setMinute bool
+	setSecond bool
+
+	hours   decimal.Decimal
+	minutes decimal.Decimal
+	seconds decimal.Decimal
+}
 
 var (
 	// ErrUnexpectedInput 入力不正エラー
@@ -25,110 +54,23 @@ func addFrac(base, frac decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
 	return base.Add(frac).QuoRem(one, 0)
 }
 
-func parseValue(s string, startIndex, endIndex int) (decimal.Decimal, error) {
-	if startIndex >= endIndex {
-		return decimal.Zero, fmt.Errorf("%w: start index %d is out of range", ErrUnexpectedInput, startIndex)
+func parseElement(s string, startIndex, index int, flag *bool, value *decimal.Decimal) error {
+	if *flag {
+		return fmt.Errorf("%w: invalid format: position: %d", ErrUnexpectedInput, index)
 	}
-	s = strings.ReplaceAll(s[startIndex+1:endIndex], ",", ".")
-	return decimal.NewFromString(s)
+
+	tmp, err := parseValue(s, startIndex, index)
+	if err != nil {
+		return err
+	}
+
+	*value = tmp
+	*flag = true
+	return nil
 }
 
-// ParseString は文字列をISO-8601 Duration書式としてパースし、 Duration を返す
-func ParseString(s string) (Duration, error) {
-	var (
-		err error
-
-		state      = stateInitial
-		negative   = false
-		startIndex = 0
-
-		setYear, setMonth, setDay, setWeek, setHour, setMinute, setSecond bool
-
-		years, months, days, weeks, hours, minutes, seconds                  decimal.Decimal
-		yearsFrac, monthsFrac, daysFrac, hoursFrac, minutesFrac, secondsFrac decimal.Decimal
-	)
-
-	for index, c := range s {
-		switch c {
-		case '-':
-			// 2回 -が出現した場合、エラー
-			if negative {
-				return Duration{}, fmt.Errorf("%w: minus sign appears twice: location: %d", ErrUnexpectedInput, index)
-			}
-			negative = true
-		case 'P':
-			if state != stateInitial {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-			state = stateParsingDate
-			startIndex = index
-		case 'T':
-			if state != stateParsingDate {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-			state = stateParsingTime
-			startIndex = index
-		case 'Y':
-			if state != stateParsingDate || setYear {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-			years, err = parseValue(s, startIndex, index)
-			setYear = true
-			startIndex = index
-		case 'M':
-			if state == stateParsingDate && !setMonth {
-				months, err = parseValue(s, startIndex, index)
-				setMonth = true
-				startIndex = index
-			} else if state == stateParsingTime && !setMinute {
-				minutes, err = parseValue(s, startIndex, index)
-				setMinute = true
-				startIndex = index
-			} else {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-		case 'D':
-			if state != stateParsingDate || setDay {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-			days, err = parseValue(s, startIndex, index)
-			setDay = true
-			startIndex = index
-		case 'W':
-			if state != stateParsingDate || setWeek {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-			weeks, err = parseValue(s, startIndex, index)
-			setWeek = true
-			startIndex = index
-		case 'H':
-			if state != stateParsingTime || setHour {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-			hours, err = parseValue(s, startIndex, index)
-			setHour = true
-			startIndex = index
-		case 'S':
-			if state != stateParsingTime || setSecond {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-			seconds, err = parseValue(s, startIndex, index)
-			setSecond = true
-			startIndex = index
-		default:
-			if state != stateParsingDate && state != stateParsingTime {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-			if !unicode.IsDigit(c) && c != '.' && c != ',' {
-				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
-			}
-			continue
-		}
-
-		if err != nil {
-			return Duration{}, err
-		}
-	}
+func generateDuration(negative bool, years, months, days, weeks, hours, minutes, seconds decimal.Decimal) (Duration, error) {
+	var yearsFrac, monthsFrac, daysFrac, hoursFrac, minutesFrac, secondsFrac decimal.Decimal
 
 	years, yearsFrac = addFrac(years, decimal.Zero)
 	months, monthsFrac = addFrac(months, yearsFrac.Mul(monthsPerYear))
@@ -154,4 +96,95 @@ func ParseString(s string) (Duration, error) {
 		Seconds:     uint32(seconds.IntPart()),
 		Nanoseconds: uint32(nanoSeconds.IntPart()),
 	}, nil
+}
+
+func parseValue(s string, startIndex, endIndex int) (decimal.Decimal, error) {
+	if startIndex >= endIndex {
+		return decimal.Zero, fmt.Errorf("%w: start index %d is out of range", ErrUnexpectedInput, startIndex)
+	}
+	s = strings.ReplaceAll(s[startIndex+1:endIndex], ",", ".")
+	return decimal.NewFromString(s)
+}
+
+// ParseString は文字列をISO-8601 Duration書式としてパースし、 Duration を返す
+func ParseString(s string) (Duration, error) {
+	var (
+		err error
+
+		state      parseState = &stateInitial{}
+		startIndex            = 0
+	)
+
+	for index, c := range s {
+		state, startIndex, err = state.NextState(c, s, startIndex, index)
+		if err != nil {
+			return Duration{}, err
+		}
+	}
+
+	return state.Generate()
+}
+
+func (s *stateInitial) NextState(c rune, _ string, _, index int) (parseState, int, error) {
+	if c == 'P' {
+		return &stateParsingDate{stateInitial: s}, index, nil
+	}
+	if s.negative {
+		// 2回 -が出現した場合、エラー
+		return nil, index, fmt.Errorf("%w: minus sign appears twice: position: %d", ErrUnexpectedInput, index)
+	}
+	s.negative = true
+	return s, index, nil
+}
+
+func (s *stateInitial) Generate() (Duration, error) {
+	return Duration{}, fmt.Errorf("%w: invalid format", ErrUnexpectedInput)
+}
+
+func (s *stateParsingDate) NextState(c rune, text string, startIndex, index int) (parseState, int, error) {
+	var err error
+	switch c {
+	case 'T':
+		return &stateParsingTime{stateParsingDate: s}, index, nil
+	case 'Y':
+		err = parseElement(text, startIndex, index, &s.setYear, &s.years)
+	case 'M':
+		err = parseElement(text, startIndex, index, &s.setMonth, &s.months)
+	case 'D':
+		err = parseElement(text, startIndex, index, &s.setDay, &s.days)
+	case 'W':
+		err = parseElement(text, startIndex, index, &s.setWeek, &s.weeks)
+	default:
+		if !unicode.IsDigit(c) && c != '.' && c != ',' {
+			err = fmt.Errorf("%w: invalid format: position: %d", ErrUnexpectedInput, index)
+		}
+		return s, startIndex, err
+	}
+	return s, index, err
+}
+
+func (s *stateParsingDate) Generate() (Duration, error) {
+	return generateDuration(s.negative, s.years, s.months, s.days, s.weeks, decimal.Zero, decimal.Zero, decimal.Zero)
+}
+
+func (s *stateParsingTime) NextState(c rune, text string, startIndex, index int) (parseState, int, error) {
+	var err error
+	switch c {
+	case 'H':
+		err = parseElement(text, startIndex, index, &s.setHour, &s.hours)
+	case 'M':
+		err = parseElement(text, startIndex, index, &s.setMinute, &s.minutes)
+	case 'S':
+		err = parseElement(text, startIndex, index, &s.setSecond, &s.seconds)
+	default:
+		if !unicode.IsDigit(c) && c != '.' && c != ',' {
+			err = fmt.Errorf("%w: invalid format: position: %d", ErrUnexpectedInput, index)
+		}
+		return s, startIndex, err
+	}
+	return s, index, err
+}
+
+func (s *stateParsingTime) Generate() (Duration, error) {
+	return generateDuration(s.negative, s.years, s.months, s.days, s.weeks, s.hours, s.minutes, s.seconds)
 }
