@@ -11,10 +11,12 @@ import (
 func TestParseString(t *testing.T) {
 	// フォーマットエラー
 	actual, err := ParseString("12Y10M")
+	assert.Zero(t, actual)
 	assert.ErrorContains(t, err, "unexpected input")
 
 	// 空
 	actual, err = ParseString("")
+	assert.Zero(t, actual)
 	assert.ErrorContains(t, err, "unexpected input")
 
 	// 日付部のみ
