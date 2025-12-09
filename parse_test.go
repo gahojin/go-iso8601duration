@@ -13,6 +13,10 @@ func TestParseString(t *testing.T) {
 	actual, err := ParseString("12Y10M")
 	assert.ErrorContains(t, err, "unexpected input")
 
+	// 空
+	actual, err = ParseString("")
+	assert.ErrorContains(t, err, "unexpected input")
+
 	// 日付部のみ
 	actual, err = ParseString("P12Y10M")
 	assert.NoError(t, err)
