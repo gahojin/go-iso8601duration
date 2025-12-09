@@ -18,7 +18,7 @@ const (
 var (
 	// ErrUnexpectedInput 入力不正エラー
 	ErrUnexpectedInput            = errors.New("unexpected input")
-	ErrUnsupportedFractionInMonth = errors.New("fractions aren't supported for the month-position")
+	ErrUnsupportedFractionInMonth = fmt.Errorf("%w: fractions aren't supported for the month-position", ErrUnexpectedInput)
 )
 
 func addFrac(base, frac decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
@@ -27,7 +27,7 @@ func addFrac(base, frac decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
 
 func parseValue(s string, startIndex, endIndex int) (decimal.Decimal, error) {
 	if startIndex >= endIndex {
-		return decimal.Zero, errors.Join(ErrUnexpectedInput, fmt.Errorf("start index %d is out of range", startIndex))
+		return decimal.Zero, fmt.Errorf("%w: start index %d is out of range", ErrUnexpectedInput, startIndex)
 	}
 	s = strings.ReplaceAll(s[startIndex+1:endIndex], ",", ".")
 	return decimal.NewFromString(s)
@@ -53,24 +53,24 @@ func ParseString(s string) (Duration, error) {
 		case '-':
 			// 2回 -が出現した場合、エラー
 			if negative {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("minus sign appears twice: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: minus sign appears twice: location: %d", ErrUnexpectedInput, index)
 			}
 			negative = true
 		case 'P':
 			if state != stateInitial {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 			state = stateParsingDate
 			startIndex = index
 		case 'T':
 			if state != stateParsingDate {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 			state = stateParsingTime
 			startIndex = index
 		case 'Y':
 			if state != stateParsingDate || setYear {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 			years, err = parseValue(s, startIndex, index)
 			setYear = true
@@ -85,42 +85,42 @@ func ParseString(s string) (Duration, error) {
 				setMinute = true
 				startIndex = index
 			} else {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 		case 'D':
 			if state != stateParsingDate || setDay {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 			days, err = parseValue(s, startIndex, index)
 			setDay = true
 			startIndex = index
 		case 'W':
 			if state != stateParsingDate || setWeek {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 			weeks, err = parseValue(s, startIndex, index)
 			setWeek = true
 			startIndex = index
 		case 'H':
 			if state != stateParsingTime || setHour {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 			hours, err = parseValue(s, startIndex, index)
 			setHour = true
 			startIndex = index
 		case 'S':
 			if state != stateParsingTime || setSecond {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 			seconds, err = parseValue(s, startIndex, index)
 			setSecond = true
 			startIndex = index
 		default:
 			if state != stateParsingDate && state != stateParsingTime {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 			if !unicode.IsDigit(c) && c != '.' && c != ',' {
-				return Duration{}, errors.Join(ErrUnexpectedInput, fmt.Errorf("invalid format: location: %d", index))
+				return Duration{}, fmt.Errorf("%w: invalid format: location: %d", ErrUnexpectedInput, index)
 			}
 			continue
 		}
@@ -134,7 +134,7 @@ func ParseString(s string) (Duration, error) {
 	months, monthsFrac = addFrac(months, yearsFrac.Mul(monthsPerYear))
 	if monthsFrac.GreaterThan(decimal.Zero) {
 		// 日に換算出来ないため、月の部分に小数は使用出来ない
-		return Duration{}, errors.Join(ErrUnexpectedInput, ErrUnsupportedFractionInMonth)
+		return Duration{}, ErrUnsupportedFractionInMonth
 	}
 
 	days, daysFrac = addFrac(days, decimal.Zero)
