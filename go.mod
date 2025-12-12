@@ -1,6 +1,6 @@
 module github.com/gahojin/go-iso8601duration
 
-go 1.22
+go 1.23
 
 require (
 	github.com/shopspring/decimal v1.4.0
