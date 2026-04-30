@@ -5,7 +5,7 @@ go 1.23
 require (
 	github.com/shopspring/decimal v1.4.0
 	github.com/stretchr/testify v1.11.1
-	pgregory.net/rapid v1.2.0
+	pgregory.net/rapid v1.3.0
 )
 
 require (
