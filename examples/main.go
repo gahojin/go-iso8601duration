@@ -8,5 +8,5 @@ import (
 
 func main() {
 	a, _ := iso8601duration.ParseString("P0.65D")
-	fmt.Printf(a.String())
+	fmt.Print(a.String())
 }

@@ -1,6 +1,7 @@
 package iso8601duration
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -91,11 +92,10 @@ func TestAddToJapan(t *testing.T) {
 
 	testCsvFilePath := filepath.Join("testdata", "add_to_japan.csv")
 
-	f, err := os.Open(testCsvFilePath)
+	f, err := os.ReadFile(filepath.Clean(testCsvFilePath))
 	assert.NoError(t, err)
-	defer f.Close()
 
-	r := csv.NewReader(f)
+	r := csv.NewReader(bytes.NewReader(f))
 	r.Comment = '/'
 	r.FieldsPerRecord = -1
 
