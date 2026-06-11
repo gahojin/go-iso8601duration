@@ -1,6 +1,7 @@
 package iso8601duration
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -77,21 +78,22 @@ func TestParseString(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		expect := Duration{
 			Negative:    rapid.Bool().Draw(t, "negative"),
-			Years:       rapid.Uint32().Draw(t, "years"),
-			Months:      rapid.Uint32().Draw(t, "months"),
-			Weeks:       rapid.Uint32().Draw(t, "weeks"),
-			Days:        rapid.Uint32().Draw(t, "days"),
-			Hours:       rapid.Uint32().Draw(t, "hours"),
-			Minutes:     rapid.Uint32().Draw(t, "minutes"),
-			Seconds:     rapid.Uint32().Draw(t, "seconds"),
-			Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
+			Years:       rapid.Uint32Max(math.MaxUint16).Draw(t, "years"),
+			Months:      rapid.Uint32Max(math.MaxUint16).Draw(t, "months"),
+			Weeks:       rapid.Uint32Max(math.MaxUint16).Draw(t, "weeks"),
+			Days:        rapid.Uint32Max(math.MaxUint16).Draw(t, "days"),
+			Hours:       rapid.Uint32Max(math.MaxUint16).Draw(t, "hours"),
+			Minutes:     rapid.Uint32Max(math.MaxUint16).Draw(t, "minutes"),
+			Seconds:     rapid.Uint32Max(math.MaxUint16).Draw(t, "seconds"),
+			Nanoseconds: rapid.Uint32Max(math.MaxUint16).Draw(t, "nanoseconds"),
 		}
 
 		actual, err = ParseString(expect.String())
 		assert.NoError(t, err)
 		// ナノ秒のうち、秒単位の桁は、秒に加算する
-		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
-		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
+		nanos := expect.Nanoseconds
+		expect.Seconds += nanos / uint32(time.Second)
+		expect.Nanoseconds = nanos % uint32(time.Second)
 		assert.Equal(t, expect, actual)
 	})
 }

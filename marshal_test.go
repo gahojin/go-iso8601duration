@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"math"
 	"testing"
 	"time"
 
@@ -21,14 +22,14 @@ func TestTextMarshal(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		expect := Duration{
 			Negative:    rapid.Bool().Draw(t, "negative"),
-			Years:       rapid.Uint32().Draw(t, "years"),
-			Months:      rapid.Uint32().Draw(t, "months"),
-			Weeks:       rapid.Uint32().Draw(t, "weeks"),
-			Days:        rapid.Uint32().Draw(t, "days"),
-			Hours:       rapid.Uint32().Draw(t, "hours"),
-			Minutes:     rapid.Uint32().Draw(t, "minutes"),
-			Seconds:     rapid.Uint32().Draw(t, "seconds"),
-			Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
+			Years:       rapid.Uint32Max(math.MaxUint16).Draw(t, "years"),
+			Months:      rapid.Uint32Max(math.MaxUint16).Draw(t, "months"),
+			Weeks:       rapid.Uint32Max(math.MaxUint16).Draw(t, "weeks"),
+			Days:        rapid.Uint32Max(math.MaxUint16).Draw(t, "days"),
+			Hours:       rapid.Uint32Max(math.MaxUint16).Draw(t, "hours"),
+			Minutes:     rapid.Uint32Max(math.MaxUint16).Draw(t, "minutes"),
+			Seconds:     rapid.Uint32Max(math.MaxUint16).Draw(t, "seconds"),
+			Nanoseconds: rapid.Uint32Max(math.MaxUint16).Draw(t, "nanoseconds"),
 		}
 
 		data, err := expect.MarshalText()
@@ -39,8 +40,9 @@ func TestTextMarshal(t *testing.T) {
 		err = actual.UnmarshalText(data)
 		assert.NoError(t, err)
 		// ナノ秒のうち、秒単位の桁は、秒に加算する
-		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
-		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
+		nanos := expect.Nanoseconds
+		expect.Seconds += nanos / uint32(time.Second)
+		expect.Nanoseconds = nanos % uint32(time.Second)
 		assert.Equal(t, expect, actual)
 	})
 }
@@ -49,14 +51,14 @@ func TestBinaryMarshal(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		expect := Duration{
 			Negative:    rapid.Bool().Draw(t, "negative"),
-			Years:       rapid.Uint32().Draw(t, "years"),
-			Months:      rapid.Uint32().Draw(t, "months"),
-			Weeks:       rapid.Uint32().Draw(t, "weeks"),
-			Days:        rapid.Uint32().Draw(t, "days"),
-			Hours:       rapid.Uint32().Draw(t, "hours"),
-			Minutes:     rapid.Uint32().Draw(t, "minutes"),
-			Seconds:     rapid.Uint32().Draw(t, "seconds"),
-			Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
+			Years:       rapid.Uint32Max(math.MaxUint16).Draw(t, "years"),
+			Months:      rapid.Uint32Max(math.MaxUint16).Draw(t, "months"),
+			Weeks:       rapid.Uint32Max(math.MaxUint16).Draw(t, "weeks"),
+			Days:        rapid.Uint32Max(math.MaxUint16).Draw(t, "days"),
+			Hours:       rapid.Uint32Max(math.MaxUint16).Draw(t, "hours"),
+			Minutes:     rapid.Uint32Max(math.MaxUint16).Draw(t, "minutes"),
+			Seconds:     rapid.Uint32Max(math.MaxUint16).Draw(t, "seconds"),
+			Nanoseconds: rapid.Uint32Max(math.MaxUint16).Draw(t, "nanoseconds"),
 		}
 		sut := dummyStruct{
 			Value: expect,
@@ -71,8 +73,9 @@ func TestBinaryMarshal(t *testing.T) {
 		err = gob.NewDecoder(bytes.NewBuffer(data)).Decode(&actual)
 		assert.NoError(t, err)
 		// ナノ秒のうち、秒単位の桁は、秒に加算する
-		expect.Seconds += uint32(time.Duration(expect.Nanoseconds) / time.Second)
-		expect.Nanoseconds = uint32(time.Duration(expect.Nanoseconds) % time.Second)
+		nanos := expect.Nanoseconds
+		expect.Seconds += nanos / uint32(time.Second)
+		expect.Nanoseconds = nanos % uint32(time.Second)
 		assert.Equal(t, expect, actual.Value)
 	})
 }
@@ -82,14 +85,14 @@ func TestJSONMarshal(t *testing.T) {
 		expect := dummyStruct{
 			Value: Duration{
 				Negative:    rapid.Bool().Draw(t, "negative"),
-				Years:       rapid.Uint32().Draw(t, "years"),
-				Months:      rapid.Uint32().Draw(t, "months"),
-				Weeks:       rapid.Uint32().Draw(t, "weeks"),
-				Days:        rapid.Uint32().Draw(t, "days"),
-				Hours:       rapid.Uint32().Draw(t, "hours"),
-				Minutes:     rapid.Uint32().Draw(t, "minutes"),
-				Seconds:     rapid.Uint32().Draw(t, "seconds"),
-				Nanoseconds: rapid.Uint32().Draw(t, "nanoseconds"),
+				Years:       rapid.Uint32Max(math.MaxUint16).Draw(t, "years"),
+				Months:      rapid.Uint32Max(math.MaxUint16).Draw(t, "months"),
+				Weeks:       rapid.Uint32Max(math.MaxUint16).Draw(t, "weeks"),
+				Days:        rapid.Uint32Max(math.MaxUint16).Draw(t, "days"),
+				Hours:       rapid.Uint32Max(math.MaxUint16).Draw(t, "hours"),
+				Minutes:     rapid.Uint32Max(math.MaxUint16).Draw(t, "minutes"),
+				Seconds:     rapid.Uint32Max(math.MaxUint16).Draw(t, "seconds"),
+				Nanoseconds: rapid.Uint32Max(math.MaxUint16).Draw(t, "nanoseconds"),
 			},
 		}
 
@@ -101,8 +104,9 @@ func TestJSONMarshal(t *testing.T) {
 		err = json.Unmarshal(data, &actual)
 		assert.NoError(t, err)
 		// ナノ秒のうち、秒単位の桁は、秒に加算する
-		expect.Value.Seconds += uint32(time.Duration(expect.Value.Nanoseconds) / time.Second)
-		expect.Value.Nanoseconds = uint32(time.Duration(expect.Value.Nanoseconds) % time.Second)
+		nanos := expect.Value.Nanoseconds
+		expect.Value.Seconds += nanos / uint32(time.Second)
+		expect.Value.Nanoseconds = nanos % uint32(time.Second)
 		assert.Equal(t, expect, actual)
 	})
 

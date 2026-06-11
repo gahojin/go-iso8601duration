@@ -3,6 +3,7 @@ package iso8601duration
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"unicode"
 
@@ -47,11 +48,26 @@ type stateParsingTime struct {
 var (
 	// ErrUnexpectedInput 入力不正エラー
 	ErrUnexpectedInput            = errors.New("unexpected input")
-	ErrUnsupportedFractionInMonth = fmt.Errorf("%w: fractions aren't supported for the month-position", ErrUnexpectedInput)
+	ErrUnsupportedFractionInMonth = fmt.Errorf("fractions aren't supported for the month-position: %w", ErrUnexpectedInput)
+	ErrOverflow                   = errors.New("overflow")
 )
 
-func addFrac(base, frac decimal.Decimal) (decimal.Decimal, decimal.Decimal) {
-	return base.Add(frac).QuoRem(one, 0)
+func toUint32(value int64, fieldName string) (uint32, error) {
+	if value < 0 || value > math.MaxUint32 {
+		return 0, fmt.Errorf("%s value %d overflows uint32 range (0 to %d): %w", fieldName, value, math.MaxUint32, ErrOverflow)
+	}
+	return uint32(value), nil
+}
+
+func addFrac(base, frac decimal.Decimal, fieldName string) (uint32, decimal.Decimal, error) {
+	value, frac := base.Add(frac).QuoRem(one, 0)
+
+	// overflow check
+	v, err := toUint32(value.IntPart(), fieldName)
+	if err != nil {
+		return 0, frac, err
+	}
+	return v, frac, nil
 }
 
 func parseElement(s string, startIndex, index int, flag *bool, value *decimal.Decimal) error {
@@ -69,32 +85,50 @@ func parseElement(s string, startIndex, index int, flag *bool, value *decimal.De
 	return nil
 }
 
-func generateDuration(negative bool, years, months, days, weeks, hours, minutes, seconds decimal.Decimal) (Duration, error) {
+func generateDuration(negative bool, years, months, days, weeks, hours, minutes, seconds decimal.Decimal) (result Duration, err error) {
 	var yearsFrac, monthsFrac, daysFrac, hoursFrac, minutesFrac, secondsFrac decimal.Decimal
+	var yearsValue, monthsValue, weeksValue, daysValue, hoursValue, minutesValue, secondsValue, nanoSecondsValue uint32
 
-	years, yearsFrac = addFrac(years, decimal.Zero)
-	months, monthsFrac = addFrac(months, yearsFrac.Mul(monthsPerYear))
+	if yearsValue, yearsFrac, err = addFrac(years, decimal.Zero, "years"); err != nil {
+		return
+	}
+	if monthsValue, monthsFrac, err = addFrac(months, yearsFrac.Mul(monthsPerYear), "months"); err != nil {
+		return
+	}
 	if monthsFrac.GreaterThan(decimal.Zero) {
 		// 日に換算出来ないため、月の部分に小数は使用出来ない
-		return Duration{}, ErrUnsupportedFractionInMonth
+		return result, ErrUnsupportedFractionInMonth
+	}
+	if weeksValue, err = toUint32(weeks.IntPart(), "weeks"); err != nil {
+		return
 	}
 
-	days, daysFrac = addFrac(days, decimal.Zero)
-	hours, hoursFrac = addFrac(hours, daysFrac.Mul(hoursPerDay))
-	minutes, minutesFrac = addFrac(minutes, hoursFrac.Mul(minutesPerHour))
-	seconds, secondsFrac = addFrac(seconds, minutesFrac.Mul(secondsPerMinute))
-	nanoSeconds := secondsFrac.Mul(nanosecondsPerSeconds)
+	if daysValue, daysFrac, err = addFrac(days, decimal.Zero, "days"); err != nil {
+		return
+	}
+	if hoursValue, hoursFrac, err = addFrac(hours, daysFrac.Mul(hoursPerDay), "hours"); err != nil {
+		return
+	}
+	if minutesValue, minutesFrac, err = addFrac(minutes, hoursFrac.Mul(minutesPerHour), "minutes"); err != nil {
+		return
+	}
+	if secondsValue, secondsFrac, err = addFrac(seconds, minutesFrac.Mul(secondsPerMinute), "seconds"); err != nil {
+		return
+	}
+	if nanoSecondsValue, err = toUint32(secondsFrac.Mul(nanosecondsPerSeconds).IntPart(), "nanoseconds"); err != nil {
+		return
+	}
 
 	return Duration{
 		Negative:    negative,
-		Years:       uint32(years.IntPart()),
-		Months:      uint32(months.IntPart()),
-		Weeks:       uint32(weeks.IntPart()),
-		Days:        uint32(days.IntPart()),
-		Hours:       uint32(hours.IntPart()),
-		Minutes:     uint32(minutes.IntPart()),
-		Seconds:     uint32(seconds.IntPart()),
-		Nanoseconds: uint32(nanoSeconds.IntPart()),
+		Years:       yearsValue,
+		Months:      monthsValue,
+		Weeks:       weeksValue,
+		Days:        daysValue,
+		Hours:       hoursValue,
+		Minutes:     minutesValue,
+		Seconds:     secondsValue,
+		Nanoseconds: nanoSecondsValue,
 	}, nil
 }
 
@@ -107,18 +141,15 @@ func parseValue(s string, startIndex, endIndex int) (decimal.Decimal, error) {
 }
 
 // ParseString は文字列をISO-8601 Duration書式としてパースし、 Duration を返す
-func ParseString(s string) (Duration, error) {
+func ParseString(s string) (result Duration, err error) {
 	var (
-		err error
-
 		state      parseState = &stateInitial{}
 		startIndex            = 0
 	)
 
 	for index, c := range s {
-		state, startIndex, err = state.NextState(c, s, startIndex, index)
-		if err != nil {
-			return Duration{}, err
+		if state, startIndex, err = state.NextState(c, s, startIndex, index); err != nil {
+			return
 		}
 	}
 
