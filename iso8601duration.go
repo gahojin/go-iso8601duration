@@ -129,13 +129,15 @@ func (d Duration) String() string {
 				ns %= 1e9
 			}
 			builder.WriteString(strconv.FormatUint(s, 10))
-			builder.WriteByte('.')
-			nsStr := strconv.FormatUint(ns, 10)
-			// 前ゼロ埋め (9桁)
-			for i := 0; i < 9-len(nsStr); i++ {
-				builder.WriteByte('0')
+			if ns != 0 {
+				builder.WriteByte('.')
+				nsStr := strconv.FormatUint(ns, 10)
+				// 前ゼロ埋め (9桁)
+				for i := 0; i < 9-len(nsStr); i++ {
+					builder.WriteByte('0')
+				}
+				builder.WriteString(strings.TrimRight(nsStr, "0"))
 			}
-			builder.WriteString(strings.TrimRight(nsStr, "0"))
 			builder.WriteByte('S')
 		} else if d.Seconds != 0 {
 			builder.WriteString(strconv.FormatUint(uint64(d.Seconds), 10))
