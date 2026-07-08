@@ -74,6 +74,19 @@ func TestParseString(t *testing.T) {
 	assert.True(t, actual.HasDatePart())
 	assert.True(t, actual.HasTimePart())
 
+	// ナノ秒がちょうど1秒の場合
+	actual, err = ParseString("PT1S")
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(1), actual.Seconds)
+	assert.Equal(t, uint32(0), actual.Nanoseconds)
+	assert.Equal(t, "PT1S", actual.String())
+
+	actual = Duration{Nanoseconds: 1000000000}
+	assert.Equal(t, "PT1S", actual.String())
+
+	actual = Duration{Seconds: 5, Nanoseconds: 1000000000}
+	assert.Equal(t, "PT6S", actual.String())
+
 	// プロパティテスト
 	rapid.Check(t, func(t *rapid.T) {
 		expect := Duration{

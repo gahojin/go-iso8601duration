@@ -18,6 +18,40 @@ import (
 	"pgregory.net/rapid"
 )
 
+func TestDuration_Normalize_Cascading(t *testing.T) {
+	// 999,999,999ns + 1ns -> 1s
+	// 59s + 1s -> 1m
+	// 59m + 1m -> 1h
+	// 23h + 1h -> 1d
+	// 11M + 1M -> 1Y
+	d := Duration{
+		Months:      11,
+		Hours:       23,
+		Minutes:     59,
+		Seconds:     59,
+		Nanoseconds: 1000000000, // 1s
+	}
+	normalized, ok := d.Normalize()
+	assert.True(t, ok)
+	// 1000000000ns -> 1s. Seconds becomes 60 -> 1m. Minutes becomes 60 -> 1h. Hours becomes 24 -> 1d.
+	assert.Equal(t, Duration{Months: 11, Days: 1}, normalized)
+
+	d2 := Duration{
+		Months:      23,         // 1Y 11M
+		Hours:       47,         // 1d 23h
+		Minutes:     119,        // 1h 59m
+		Seconds:     119,        // 1m 59s
+		Nanoseconds: 2000000000, // 2s
+	}
+	normalized, ok = d2.Normalize()
+	assert.True(t, ok)
+	// 2s + 119s = 121s = 2m 1s
+	// 2m + 119m = 121m = 2h 1m
+	// 2h + 47h = 49h = 2d 1h
+	// 23M = 1Y 11M
+	assert.Equal(t, Duration{Years: 1, Months: 11, Days: 2, Hours: 1, Minutes: 1, Seconds: 1}, normalized)
+}
+
 func TestAdd(t *testing.T) {
 	sut, err := ParseString("P1Y2M3W4DT5H6M7.8S")
 	assert.NoError(t, err)

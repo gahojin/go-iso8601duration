@@ -40,14 +40,7 @@ func (d *Duration) UnmarshalBinary(data []byte) error {
 }
 
 func (d Duration) MarshalJSON() ([]byte, error) {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	s := d.String()
-	err := enc.Encode(s)
-	if err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
+	return json.Marshal(d.String())
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) error {

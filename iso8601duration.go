@@ -1,7 +1,6 @@
 package iso8601duration
 
 import (
-	"bytes"
 	"math"
 	"strconv"
 	"strings"
@@ -123,13 +122,22 @@ func (d Duration) String() string {
 			builder.WriteByte('M')
 		}
 		if d.Nanoseconds != 0 {
-			// 小数以下
-			sec, nano := decimal.NewFromUint64(uint64(d.Nanoseconds)).QuoRem(nanosecondsPerSeconds, 0)
-			nanoStr := nano.String()
-			builder.WriteString(sec.Add(decimal.NewFromUint64(uint64(d.Seconds))).String())
-			builder.WriteByte('.')
-			builder.Write(bytes.Repeat([]byte{'0'}, 9-len(nanoStr)))
-			builder.WriteString(strings.TrimRight(nanoStr, "0"))
+			s := uint64(d.Seconds)
+			ns := uint64(d.Nanoseconds)
+			if ns >= 1e9 {
+				s += ns / 1e9
+				ns %= 1e9
+			}
+			builder.WriteString(strconv.FormatUint(s, 10))
+			if ns != 0 {
+				builder.WriteByte('.')
+				nsStr := strconv.FormatUint(ns, 10)
+				// 前ゼロ埋め (9桁)
+				for i := 0; i < 9-len(nsStr); i++ {
+					builder.WriteByte('0')
+				}
+				builder.WriteString(strings.TrimRight(nsStr, "0"))
+			}
 			builder.WriteByte('S')
 		} else if d.Seconds != 0 {
 			builder.WriteString(strconv.FormatUint(uint64(d.Seconds), 10))
