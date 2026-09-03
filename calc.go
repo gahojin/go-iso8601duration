@@ -148,7 +148,7 @@ func (d Duration) Normalize() (Duration, bool) {
 	r := d
 
 	// 4回正規処理を行う (日 <- 時 <- 分 <- 秒 <- ナノ秒)
-	for step := 0; step < 4; step++ {
+	for range 4 {
 		// 年
 		if ok := normalize(&r.Years, &r.Months, 12); !ok {
 			return d, false

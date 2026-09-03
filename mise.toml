@@ -9,3 +9,37 @@ lefthook = "latest"
 node = "26"
 "npm:@commitlint/cli" = "latest"
 "npm:@commitlint/config-conventional" = "latest"
+
+[tasks."go:update"]
+description = "各 go.mod ディレクトリで順次 get -u と tidy を実行"
+run = """
+find . \\( -path "*/.*" \\) -prune -o -name "go.mod" -print | while read -r modfile; do
+  dir=$(dirname "$modfile")
+  echo "----------------------------------------"
+  echo "📦 Updating: $dir"
+  echo "----------------------------------------"
+  (
+    cd "$dir" || exit 1
+    go get -u ./...
+    go mod tidy
+  )
+done
+echo "✅ All modules updated!"
+"""
+
+[tasks."go:fix"]
+description = "各 go.mod ディレクトリで順次 fix を実行"
+run = """
+find . \\( -path "*/.*" \\) -prune -o -name "go.mod" -print | while read -r modfile; do
+  dir=$(dirname "$modfile")
+  echo "----------------------------------------"
+  echo "📦 Updating: $dir"
+  echo "----------------------------------------"
+  (
+    cd "$dir" || exit 1
+    go fix ./...
+    go fix ./...
+  )
+done
+echo "✅ All modules updated!"
+"""
