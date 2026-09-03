@@ -13,7 +13,7 @@ node = "26"
 [tasks."go:update"]
 description = "各 go.mod ディレクトリで順次 get -u と tidy を実行"
 run = """
-find . -name "go.mod" -not -path "*/.*" -not -path "*/node_modules/*" | while read -r modfile; do
+find . \\( -path "*/.*" \\) -prune -o -name "go.mod" -print | while read -r modfile; do
   dir=$(dirname "$modfile")
   echo "----------------------------------------"
   echo "📦 Updating: $dir"
@@ -30,7 +30,7 @@ echo "✅ All modules updated!"
 [tasks."go:fix"]
 description = "各 go.mod ディレクトリで順次 fix を実行"
 run = """
-find . -name "go.mod" -not -path "*/.*" -not -path "*/node_modules/*" | while read -r modfile; do
+find . \\( -path "*/.*" \\) -prune -o -name "go.mod" -print | while read -r modfile; do
   dir=$(dirname "$modfile")
   echo "----------------------------------------"
   echo "📦 Updating: $dir"
